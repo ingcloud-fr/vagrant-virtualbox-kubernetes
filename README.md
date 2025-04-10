@@ -1,7 +1,7 @@
 # Kubernetes avec Vagrant et VirtualBox (Flannel / Cilium / WireGuard)
 
 Ce projet vous permet de créer un cluster Kubernetes (version paramétrable) avec Vagrant, utilisant **VirtualBox en mode Bridge ou Nat**.
-Il vous permet de choisir dynamiquement le CNI (**Flannel** ou **Cilium avec encryption WireGuard**) et gère automatiquement les IPs réelles des nœuds.
+Il vous permet de choisir le CNI (**Flannel** ou **Cilium avec encryption WireGuard**) et gère automatiquement les IPs réelles des nœuds.
 
 ---
 
@@ -11,15 +11,34 @@ Il vous permet de choisir dynamiquement le CNI (**Flannel** ou **Cilium avec enc
 vagrant up
 ```
 
-👉 Il est aussi possible d'utiliser une autre image Ubuntu (ex : generic/ubuntu2204) :
+ou :
 
 ```bash
-UBUNTU_BOX=generic/ubuntu2204 vagrant up
+CLUSTER_NAME=dev vagrant up
+```
+
+👉 Il est aussi possible d'utiliser une autre image Ubuntu que *ubuntu/jammy64* (ex : *boxen/ubuntu-24.04*) :
+
+```bash
+# Testée OK
+UBUNTU_BOX=boxen/ubuntu-24.04 vagrant up
+```
+👉 Ou de personnaliser le nom du cluster (par defaut *k8s*) pour en exécuter plusieurs côte à côte :
+
+```bash
+CLUSTER_NAME=dev vagrant up
+```
+
+Ou de faire les 2 :
+
+```
+UBUNTU_BOX=boxen/ubuntu-24.04 CLUSTER_NAME=test vagrant up
 ```
 
 ---
 
 ## ⚙️ Paramètres personnalisables
+
 
 ### 🔧 Vagrantfile
 
@@ -50,6 +69,7 @@ UBUNTU_BOX=generic/ubuntu2204 vagrant up
 ## ✅ Fonctionnalités actuelles
 
 - Déploiement multi-nœuds automatisé
+- Prise en charge du multi-cluster avec `CLUSTER_NAME`
 - Installation de Kubernetes avec `kubeadm`
 - Configuration automatique de `kubectl`
 - Support **NAT** et **BRIDGE**
@@ -75,8 +95,25 @@ UBUNTU_BOX=generic/ubuntu2204 vagrant up
 
 - Pour détruire proprement les machines :
   ```bash
-  vagrant destroy -f
+  CLUSTER_NAME=dev vagrant destroy -f
   ```
+  Ou
+
+  ```bash
+  CLUSTER_NAME=dev vagrant destroy -f
+  ```
+
+- Pour se connecter en ssh :
+
+  ```bash
+  CLUSTER_NAME=dev vagrant ssh dev-controlplane
+  ```
+  ou
+
+  ```bash
+  CLUSTER_NAME=dev vagrant ssh dev-node01
+  ```
+
 - Pour re-provisionner une machine sans la redémarrer :
   ```bash
   vagrant provision controlplane
@@ -85,7 +122,7 @@ UBUNTU_BOX=generic/ubuntu2204 vagrant up
   ```bash
   export KUBECONFIG=$(pwd)/.kube/config
   ```
-- La commande `kubeadm join` est générée automatiquement par le `controlplane` et stockée dans `join.sh`. Elle est ensuite utilisée par les nœuds workers pour rejoindre le cluster :
+- La commande `kubeadm join` est générée automatiquement par le `controlplane` et stockée dans `join-$CLUSTER_NAME.sh`. Elle est ensuite utilisée par les nœuds workers pour rejoindre le cluster :
   ```bash
   kubeadm join <IP>:6443 --token <token> --discovery-token-ca-cert-hash <hash>
   ```

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-#
-# Set up /etc/hosts so we can resolve all the nodes
+# ================================
+# Met à jour /etc/hosts + crée public-ip
+# ================================
 
 set -e
 
@@ -10,42 +11,78 @@ NUM_WORKER_NODES=$3
 MASTER_IP_START=$4
 NODE_IP_START=$5
 
-if [ "$BUILD_MODE" = "BRIDGE" ]
-then
-    # Determine machine IP from route table -
-    # Interface that routes to default GW that isn't on the NAT network.
-    MY_IP="$(ip route | grep default | grep -Pv '10\.\d+\.\d+\.\d+' | awk '{ print $9 }')"
-
-    # From this, determine the network (which for average broadband we assume is a /24)
-    MY_NETWORK=$(echo $MY_IP | awk 'BEGIN {FS="."} ; { printf("%s.%s.%s", $1, $2, $3) }')
-
-    # Create a script that will return this machine's IP to the bridge post-provisioner.
-    cat <<EOF > /usr/local/bin/public-ip
+# Fonction pour créer la commande public-ip
+create_public_ip() {
+  local ip="$1"
+  cat <<EOF > /usr/local/bin/public-ip
 #!/usr/bin/env sh
-echo -n $MY_IP
+echo -n $ip
 EOF
-    chmod +x /usr/local/bin/public-ip
-else
-    # Determine machine IP from route table -
-    # Interface that is connected to the NAT network.
-    MY_IP="$(ip route | grep "^$IP_NW" | awk '{print $NF}')"
-    MY_NETWORK=$IP_NW
+  chmod +x /usr/local/bin/public-ip
+}
+
+# Pour mod BRIDGE_STATIC et BRIDGE_DYN
+if [[ "$BUILD_MODE" =~ ^BRIDGE ]]; then
+
+  echo "[DEBUG] Interfaces réseau disponibles dans la VM :"
+  ip a
+  echo "[DEBUG] Table de routage :"
+  ip route
+
+  # Priorité à enp0s8 (interface bridge VirtualBox)
+  if ip a show enp0s8 &>/dev/null; then
+    BRIDGE_IFACE="enp0s8"
+  else
+    BRIDGE_IFACE=$(ip route | grep default | grep -Ev '10\.' | awk '{ print $5 }' | head -n1)
+    if [ -z "$BRIDGE_IFACE" ]; then
+      echo "[ERREUR] Impossible de détecter une interface bridge."
+      exit 1
+    fi
+  fi
+
+  for i in {1..30}; do
+    MY_IP=$(ip -o -4 addr show dev "$BRIDGE_IFACE" | awk '{print $4}' | cut -d/ -f1)
+    if [ -n "$MY_IP" ]; then
+      echo "[DEBUG] BRIDGE MODE – IP attribuée : $MY_IP"
+      break
+    fi
+    echo "[ATTENTE] Pas d'IP sur $BRIDGE_IFACE, tentative $i/30..."
+    sleep 1
+  done
+
+  if [ -z "$MY_IP" ]; then
+    echo "[ERREUR] Aucune IP détectée sur l’interface $BRIDGE_IFACE après 30 secondes."
+    ip a show "$BRIDGE_IFACE"
+    exit 1
+  fi
+
+  create_public_ip "$MY_IP"
+
+  sed -i "/ubuntu-jammy/d" /etc/hosts
+  sed -i "/$(hostname)/d" /etc/hosts
+
+  echo "PRIMARY_IP=$MY_IP" >> /etc/environment
+  echo "[DEBUG] Interface bridge utilisée : $BRIDGE_IFACE"
+  echo "[DEBUG] BRIDGE MODE – IP attribuée : $MY_IP"
+  exit 0
 fi
 
-# Remove unwanted entries
-sed -e '/^.*ubuntu-jammy.*/d' -i /etc/hosts
-sed -e "/^.*${HOSTNAME}.*/d" -i /etc/hosts
 
-# Export PRIMARY IP as an environment variable
-echo "PRIMARY_IP=${MY_IP}" >> /etc/environment
+# ====== NAT MODE ======
+MY_IP="$(ip route | grep "^$IP_NW" | awk '{print $NF}')"
+MY_NETWORK="$IP_NW"
 
-[ "$BUILD_MODE" = "BRIDGE" ] && exit 0
+create_public_ip "$MY_IP"
 
-# Update /etc/hosts about other hosts (NAT mode)
-echo "${MY_NETWORK}.${MASTER_IP_START} controlplane" >> /etc//hosts
-for i in $(seq 1 $NUM_WORKER_NODES)
-do
-    num=$(( $NODE_IP_START + $i ))
-    echo "${MY_NETWORK}.${num} node0${i}" >> /etc//hosts
+# Nettoyage de /etc/hosts
+sed -i "/ubuntu-jammy/d" /etc/hosts
+sed -i "/$(hostname)/d" /etc/hosts
+
+echo "PRIMARY_IP=$MY_IP" >> /etc/environment
+
+# Ajout des autres hôtes si NAT
+echo "${MY_NETWORK}.${MASTER_IP_START} controlplane" >> /etc/hosts
+for i in $(seq 1 "$NUM_WORKER_NODES"); do
+  ip="${MY_NETWORK}.$((NODE_IP_START + i))"
+  echo "$ip node0${i}" >> /etc/hosts
 done
-
