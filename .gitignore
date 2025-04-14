@@ -2,3 +2,8 @@ join.sh
 join-*.sh
 .vagrant
 log*
+*.box
+id_rsa*
+admin.conf
+authorized_keys*
+hosts*

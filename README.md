@@ -1,145 +1,156 @@
-# Kubernetes avec Vagrant et VirtualBox (Flannel / Cilium / WireGuard)
+# Kubernetes with Vagrant and VirtualBox (Flannel / Cilium / WireGuard)
 
-Ce projet vous permet de créer un cluster Kubernetes (version paramétrable) avec Vagrant, utilisant **VirtualBox en mode Bridge ou Nat**.
-Il vous permet de choisir le CNI (**Flannel** ou **Cilium avec encryption WireGuard**) et gère automatiquement les IPs réelles des nœuds.
+This project lets you create a Kubernetes cluster (version configurable) using Vagrant, with **VirtualBox in Bridge or NAT mode**. You can choose the CNI (**Flannel** or **Cilium with WireGuard encryption**) and it automatically manages the real IPs of the nodes.
 
 ---
 
-## 🚀 Lancer le cluster
+## Base Image
+
+- `jammy-updated`: See the [README](build_image/README.md) in the `build_image` folder
+
+## 🚀 Launch the Cluster
+
+### With vagrant up
+
+Works out of the box:
+
+With default values:
+- BUILD_MOD="BRIDGE_STATIC"
+- K8S_VERSION="1.32"
+- NUM_WORKER_NODES=1
+- CNI_PLUGIN="cillium"
+- CLUSTER_NAME="k8s" (prefix)
+- UBUNTU_BOX="jammy-updated"
+
+Or by passing environment variables at launch, for example to create a cluster named `dev`:
 
 ```bash
-vagrant up
+$ CLUSTER_NAME=dev vagrant up
 ```
 
-ou :
+You can combine environment variables:
 
 ```bash
-CLUSTER_NAME=dev vagrant up
+$ CLUSTER_NAME=dev CNI_PLUGIN=flannel K8S_VERSION=1.31 BUILD_MODE=nat NUM_WORKER_NODES=2 vagrant up
 ```
 
-👉 Il est aussi possible d'utiliser une autre image Ubuntu que *ubuntu/jammy64* (ex : *boxen/ubuntu-24.04*) :
+To cleanly destroy the machines:
 
 ```bash
-# Testée OK
-UBUNTU_BOX=boxen/ubuntu-24.04 vagrant up
+$ vagrant destroy -f
 ```
-👉 Ou de personnaliser le nom du cluster (par defaut *k8s*) pour en exécuter plusieurs côte à côte :
+Or if the cluster has a custom name:
 
 ```bash
-CLUSTER_NAME=dev vagrant up
+$ CLUSTER_NAME=dev vagrant destroy -f
 ```
 
-Ou de faire les 2 :
+To connect via SSH:
 
+```bash
+$ vagrant ssh k8s-controlplane
 ```
-UBUNTU_BOX=boxen/ubuntu-24.04 CLUSTER_NAME=test vagrant up
+Or if the cluster has a custom name:
+
+```bash
+$ CLUSTER_NAME=dev vagrant ssh dev-node01
 ```
 
----
+### With vcluster (management script)
 
-## ⚙️ Paramètres personnalisables
+Help with `--help`:
 
+```bash
+$ ./vcluster --help
+Usage:
+  ./vcluster up -n <cluster_name> -c <cni> -v <k8s_version> -w <workers> -m <build_mode>
+  ./vcluster destroy -n <cluster_name>
+  ./vcluster ssh -n <cluster_name> <node> | ssh <cluster_name-node>
+  ./vcluster list [-n <cluster_name>]
+Options:
+  -n <cluster_name>   Cluster name prefix (required for up, destroy)
+  -c <cni>            CNI plugin: cilium | flannel (default: cilium)
+  -v <k8s_version>    Kubernetes version (default: 1.32)
+  -w <workers>        Number of worker nodes (default: 1)
+  -m <build_mode>     Network mode: bridge_static | bridge_dyn | nat (default: bridge_static)
 
-### 🔧 Vagrantfile
+For bridge_static and bridge_dyn, you have to set IPs in the Vagrantfile
+```
 
-- `BUILD_MODE="BRIDGE"` (ou `NAT`)  
-  Mode de réseau utilisé pour les VMs. **BRIDGE est recommandé** (accès direct aux IPs).
+Start a cluster with default values:
 
-- `NUM_WORKER_NODES=1`  
-  Nombre de nœuds worker à déployer en plus du `controlplane`.
+```bash
+$ ./vcluster up
+```
 
-- `UBUNTU_BOX="ubuntu/jammy64"`  
-  Image utilisée pour provisionner les machines (Ubuntu 22.04 par défaut). Possibilité d’utiliser `generic/ubuntu2204` ou autre image compatible Vagrant Cloud.
+Equivalent to:
 
-### 🔧 scripts/install-k8s-cluster.sh
+```bash
+$ ./vcluster up -n k8s -c cillium -w 1 -v 1.32
+```
 
-- `K8S_VERSION="1.32"`  
-  Version majeure.minor de Kubernetes à installer (stable).
+Example: Create a cluster named `dev` with 3 nodes (1 controlplane + 2 workers), using *flannel* as CNI, Kubernetes v1.31 in *NAT* mode:
 
-- `POD_CIDR="10.244.0.0/16"`  
-  CIDR utilisé pour le réseau des Pods.
+```bash
+$ ./vcluster up -n dev -c flannel -v 1.31 -w 2 -m nat
+```
 
-- `CNI_PLUGIN="cilium"`  
-  Plugin réseau à installer. Valeurs possibles :
-  - `flannel`
-  - `cilium` (**recommandé**, avec encryption WireGuard)
+List clusters:
 
----
+```bash
+$ ./vcluster list
+```
 
-## ✅ Fonctionnalités actuelles
+List nodes of a cluster:
 
-- Déploiement multi-nœuds automatisé
-- Prise en charge du multi-cluster avec `CLUSTER_NAME`
-- Installation de Kubernetes avec `kubeadm`
-- Configuration automatique de `kubectl`
-- Support **NAT** et **BRIDGE**
-- Choix du **CNI** (`flannel` ou `cilium + encryption Wireguard`)
-- Génération automatique de la commande `kubeadm join`
+```bash
+$ ./vcluster list -n <cluster_name>
+```
 
----
+To SSH into a node:
 
-## 📌 Évolutions envisagées
+```bash
+$ ./vcluster ssh <cluster_name-node>
+```
 
-- [ ] Support des runtimes de bas niveau (gVisor...)
-- [ ] Ajout d’un Ingress Controller (NGINX)
-- [ ] Ajout d’un LoadBalancer local (comme MetalLB ou LB Vagrant)
-- [ ] Installation de la Dashboard Kubernetes
-- [ ] Intégration de la stack Prometheus + Grafana
-- [ ] Intégration de **Trivy** (scanner de vulnérabilités + CIS Benchmarks)
-- [ ] Intégration de **Kyverno** (politiques de sécurité Kubernetes)
-- [ ] Intégration de **ArgoCD** (GitOps et déploiement continu)
+Or:
 
----
+```bash
+$ ./vcluster ssh -n <cluster_name> <node>
+```
 
-## 💡 Tips
+## Other
 
-- Pour détruire proprement les machines :
-  ```bash
-  CLUSTER_NAME=dev vagrant destroy -f
-  ```
-  Ou
+You can specify another Ubuntu image (may not work):
 
-  ```bash
-  CLUSTER_NAME=dev vagrant destroy -f
-  ```
+```bash
+$ UBUNTU_BOX="bento/ubuntu-24.04" vagrant up
+```
 
-- Pour se connecter en ssh :
+or modify it directly in the **Vagrantfile**
 
-  ```bash
-  CLUSTER_NAME=dev vagrant ssh dev-controlplane
-  ```
-  ou
+- Note: Not supported in **vcluster**.
 
-  ```bash
-  CLUSTER_NAME=dev vagrant ssh dev-node01
-  ```
+## ✅ Current Features
 
-- Pour re-provisionner une machine sans la redémarrer :
-  ```bash
-  vagrant provision controlplane
-  ```
-- Pour accéder au cluster depuis l’hôte (si en mode BRIDGE) :
-  ```bash
-  export KUBECONFIG=$(pwd)/.kube/config
-  ```
-- La commande `kubeadm join` est générée automatiquement par le `controlplane` et stockée dans `join-$CLUSTER_NAME.sh`. Elle est ensuite utilisée par les nœuds workers pour rejoindre le cluster :
-  ```bash
-  kubeadm join <IP>:6443 --token <token> --discovery-token-ca-cert-hash <hash>
-  ```
+- Multi-node deployment
+- Multi-cluster support using `CLUSTER_NAME`
+- Kubernetes installation via `kubeadm`
+- Automatic `kubectl` configuration
+- Support for **NAT**, **BRIDGE_STATIC**, and **BRIDGE_DYN**
+- Choice of **CNI** (`flannel` or `cilium + WireGuard encryption`)
+- Automatic generation of the `kubeadm join` command
 
----
-
-## 🛠 Dépendances minimales
+## 🛠 Minimum Dependencies
 
 - [VirtualBox](https://www.virtualbox.org/)
 - [Vagrant](https://www.vagrantup.com/)
 
-Testé avec Ubuntu 22.04 LTS comme système hôte et invité.
+Tested with Ubuntu 22.04 LTS as host OS and VirtualBox 7.0.
 
 ---
 
-## 📝 Auteur
+## 📝 Author
 
-Vincent — DevOps & Explorateur Kubernetes 🚀
-
+Vincent — DevOps & Kubernetes Explorer 🚀
 
