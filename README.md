@@ -14,6 +14,10 @@ This project lets you create a Kubernetes cluster (version configurable) using V
 
 Works out of the box:
 
+```bash
+$ vagrant up
+```
+
 With default values:
 - BUILD_MOD="BRIDGE_STATIC"
 - K8S_VERSION="1.32"

@@ -68,6 +68,7 @@ apt-get install -y \
   linux-headers-$(uname -r) \
   linux-tools-common \
   linux-tools-$(uname -r) \
+  jq \
   git
 
 # Préparation du noyau pour Kubernetes (réseaux, ponts)

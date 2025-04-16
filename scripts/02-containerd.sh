@@ -23,3 +23,12 @@ sed -i 's|sandbox_image = ".*"|sandbox_image = "registry.k8s.io/pause:3.10"|' /e
 # Redémarrage et activation de containerd
 systemctl restart containerd
 systemctl enable containerd
+
+# Création de /etc/crictl.yaml for containerd.
+#echo "[INFO] Creating /etc/crictl.yaml for containerd..."
+sudo tee /etc/crictl.yaml > /dev/null <<EOF
+runtime-endpoint: unix:///run/containerd/containerd.sock
+image-endpoint: unix:///run/containerd/containerd.sock
+timeout: 10
+debug: false
+EOF

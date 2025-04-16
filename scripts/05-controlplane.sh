@@ -40,7 +40,8 @@ systemctl restart kubelet
 # Configuration de kubectl pour vagrant
 mkdir -p /home/vagrant/.kube
 cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
-chown vagrant:vagrant /home/vagrant/.kube/config
+chmod 600 /home/vagrant/.kube/config
+chown -R vagrant:vagrant /home/vagrant/.kube
 
 # Copie du kubeconfig pour les workers
 cp /etc/kubernetes/admin.conf /vagrant/admin.conf
@@ -97,3 +98,8 @@ JOIN_COMMAND=$(echo "$JOIN_COMMAND" | sed "s/$OLD_IP/$MY_IP/")
 echo "$JOIN_COMMAND" > /vagrant/join-${CLUSTER_NAME}.sh
 chown vagrant:vagrant /vagrant/join-${CLUSTER_NAME}.sh
 chmod +x /vagrant/join-${CLUSTER_NAME}.sh
+
+# On supprime la taint node-role.kubernetes.io/control-plane:NoSchedule
+echo 
+"[+] Removing Taint node-role.kubernetes.io/control-plane:NoSchedule"
+kubectl taint node ${CLUSTER_NAME}-controlplane node-role.kubernetes.io/control-plane-
