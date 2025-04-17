@@ -45,7 +45,10 @@ done
 
 case $COMMAND in
   up)
-    echo "[+] Starting cluster '$CLUSTER_NAME'..."
+    echo "[+] Starting new cluster '$CLUSTER_NAME' in $BUILD_MODE mode..."
+    echo "  Kubernetes version: $K8S_VERSION"
+    echo "  Workers: $NUM_WORKER_NODES"
+    echo "  CNI: $CNI_PLUGIN"
     CNI_PLUGIN=$CNI_PLUGIN \
     K8S_VERSION=$K8S_VERSION \
     NUM_WORKER_NODES=$NUM_WORKER_NODES \

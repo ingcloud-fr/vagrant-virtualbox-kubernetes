@@ -58,8 +58,6 @@ chown vagrant:vagrant /home/vagrant/.ssh/id_rsa
 chmod 600 /home/vagrant/.ssh/id_rsa
 cp /home/vagrant/.ssh/id_rsa.pub /vagrant/id_rsa.vagrant.${CLUSTER_NAME}.pub
 
-
-
 # Installation du CNI
 if [[ "$CNI_PLUGIN" == "flannel" ]]; then
   su - vagrant -c "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
@@ -100,6 +98,5 @@ chown vagrant:vagrant /vagrant/join-${CLUSTER_NAME}.sh
 chmod +x /vagrant/join-${CLUSTER_NAME}.sh
 
 # On supprime la taint node-role.kubernetes.io/control-plane:NoSchedule
-echo 
-"[+] Removing Taint node-role.kubernetes.io/control-plane:NoSchedule"
-kubectl taint node ${CLUSTER_NAME}-controlplane node-role.kubernetes.io/control-plane-
+echo "[+] Removing Taint node-role.kubernetes.io/control-plane:NoSchedule"
+su - vagrant -c "kubectl taint node ${CLUSTER_NAME}-controlplane node-role.kubernetes.io/control-plane-"
