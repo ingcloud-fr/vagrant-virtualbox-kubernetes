@@ -6,7 +6,6 @@ echo "🔧 Backing up manifests, kubelet config, and etcd data permissions..."
 
 MANIFEST_DIR="/etc/kubernetes/manifests"
 BACKUP_MANIFEST_DIR="/etc/kubernetes/backup"
-KUBELET_DIR="/var/lib/kubelet"
 ETCD_DIR="/var/lib/etcd"
 KUBELET_CONFIGMAP_BACKUP="/etc/kubernetes/backup/kubelet-config-cm.yaml"
 

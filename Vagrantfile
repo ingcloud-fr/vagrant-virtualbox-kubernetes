@@ -15,8 +15,9 @@
 #                                   À utiliser si le mode BRIDGE ne fonctionne pas.
 BUILD_MODE = (ENV['BUILD_MODE'] || "BRIDGE_STATIC").upcase
 
-# Image Ubuntu - $ UBUNTU_BOX=generic/ubuntu2204 vagrant up
-UBUNTU_BOX = ENV['UBUNTU_BOX'] || "jammy64-updated"
+# Image Ubuntu 
+#UBUNTU_BOX = ENV['UBUNTU_BOX'] || "noble64-updated" # Ubuntu 24.04 par défaut
+UBUNTU_BOX = ENV['UBUNTU_BOX'] || "jammy64-updated" # Ubuntu 22.04 par défaut
 
 # Nom du cluster utilisé pour préfixer les noms de VMs
 CLUSTER_NAME = ENV['CLUSTER_NAME'] || "k8s"
@@ -27,11 +28,16 @@ CNI_PLUGIN = ENV['CNI_PLUGIN'] || "cilium"
 # Version Kubernetes
 K8S_VERSION = ENV['K8S_VERSION'] || "1.32"
 
+# CONTAINER_RUNTIME : "containerd" | "docker"
+# - "containerd" : installe containerd depuis les dépôts de la distribution
+# - "docker"     : installe Docker Engine + containerd.io depuis les dépôts Docker
+CONTAINER_RUNTIME = ENV['CONTAINER_RUNTIME'] || "docker"
+
 # Nombre de nœuds workers à créer
 NUM_WORKER_NODES = (ENV['NUM_WORKER_NODES'] || 1).to_i
 
 # Paramètres réseau utilisés uniquement pour le mode BRIDGE_STATIC 
-BRIDGE_STATIC_IP_START = "192.168.1.200" # Début des IPs statiques pour BRIDGE_STATIC
+BRIDGE_STATIC_IP_START = ENV['BRIDGE_STATIC_IP_START'] || "192.168.1.200" # Début des IPs statiques pour BRIDGE_STATIC
 
 # Paramètres réseau utilisés uniquement pour le mode NAT 
 IP_NW = "192.168.56"   # Le network
@@ -76,7 +82,11 @@ Vagrant.configure("2") do |config|
 
     # === Provisioning par scripts ===
     node.vm.provision "01-network", type: "shell", path: "scripts/01-base-setup.sh"
-    node.vm.provision "02-containerd", type: "shell", path: "scripts/02-containerd.sh"
+    if CONTAINER_RUNTIME == "docker"
+      node.vm.provision "02-containerd-docker", type: "shell", path: "scripts/02-containerd-docker.sh"
+    else
+      node.vm.provision "02-containerd", type: "shell", path: "scripts/02-containerd.sh"
+    end
     node.vm.provision "03-kubernetes", type: "shell", path: "scripts/03-kubernetes.sh", env: {"K8S_VERSION" => K8S_VERSION}
     node.vm.provision "04-swap-kubelet", type: "shell", path: "scripts/04-swap-and-kubelet.sh"
     node.vm.provision "05-controlplane", type: "shell", path: "scripts/05-controlplane.sh", 
@@ -109,7 +119,11 @@ Vagrant.configure("2") do |config|
 
       # === Provisioning par scripts ===
       node.vm.provision "01-network", type: "shell", path: "scripts/01-base-setup.sh"
-      node.vm.provision "02-containerd", type: "shell", path: "scripts/02-containerd.sh"
+      if CONTAINER_RUNTIME == "docker"
+        node.vm.provision "02-containerd-docker", type: "shell", path: "scripts/02-containerd-docker.sh"
+      else
+        node.vm.provision "02-containerd", type: "shell", path: "scripts/02-containerd.sh"
+      end
       node.vm.provision "03-kubernetes", type: "shell", path: "scripts/03-kubernetes.sh", env: {"K8S_VERSION" => K8S_VERSION}
       node.vm.provision "04-swap-kubelet", type: "shell", path: "scripts/04-swap-and-kubelet.sh"
       node.vm.provision "06-worker", type: "shell", path: "scripts/06-worker.sh", env: {"CLUSTER_NAME" => CLUSTER_NAME}

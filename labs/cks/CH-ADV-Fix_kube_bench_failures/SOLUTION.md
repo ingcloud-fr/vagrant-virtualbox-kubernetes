@@ -173,7 +173,7 @@ Warning: Kubernetes version was not auto-detected because kubectl could not conn
 
 ✅ Test passes.
 
-## 🔐 Fixing API Server Tests: 1.2.6–1.2.8, 1.2.15
+## 🔧 Fixing API Server Tests: 1.2.6–1.2.8, 1.2.15
 
 ```
 $ sudo kube-bench run --version 1.32 -c "1.2.6,1.2.7,1.2.8,1.2.15"
@@ -240,7 +240,7 @@ Warning: Kubernetes version was not auto-detected because kubectl could not conn
 
 ✅ Test passes.
 
-## 🧠 Fixing Controller Manager: 1.3.2
+## 🔧 Fixing Controller Manager: 1.3.2
 
 ```
 $ $ sudo kube-bench run --version 1.32 -c "1.3.2"
@@ -278,7 +278,7 @@ Warning: Kubernetes version was not auto-detected because kubectl could not conn
 
 ✅ Test passes.
 
-## 🧠 Fixing Controller Manager: 1.3.2
+## 🔧 Fixing Controller Manager: 1.3.2
 
 
 ```
@@ -317,7 +317,7 @@ Warning: Kubernetes version was not auto-detected because kubectl could not conn
 
 ✅ Test passes.
 
-## 🔒 Fixing Etcd: 2.2
+## 🔧 Fixing Etcd: 2.2
 
 ```
 $ sudo kube-bench run --version 1.32 -c "2.2"
@@ -540,7 +540,7 @@ $ sudo kube-bench run --version 1.32 -c "4.2.1,4.2.2"
 
 ✅ Test passes.
 
-## Final Validation
+## 🏁 Final Validation
 
 Ok everything is fine, just for fun, we can run the whole tests :
 

@@ -1,0 +1,45 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+  config.vm.hostname = "jammy-base"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "jammy64-updated"
+    vb.memory = 1024
+    vb.cpus = 1
+  end
+
+  # Provision initial : mise à jour complète + nettoyage
+  config.vm.provision "shell", inline: <<-SHELL
+    echo "[+] Mise à jour complète de la box..."
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get -y dist-upgrade
+    apt-get -y autoremove --purge
+    apt-get clean
+    
+    # Upgrade en 24.04
+    ## do-release-upgrade # pour passer en 24.04 LTS
+
+        
+    # FALCO
+    curl -fsSL https://falco.org/repo/falcosecurity-packages.asc | gpg --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" > /etc/apt/sources.list.d/falcosecurity.list
+    apt-get update -y
+    sudo apt-get install -y dialog
+    sudo FALCO_FRONTEND=noninteractive apt-get install -y falco
+    systemctl stop falco || true 
+
+    # Autres packages
+    apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common \ 
+        linux-headers-$(uname -r) linux-tools-common linux-tools-$(uname -r) curl git
+
+    # Cleanup
+    echo "[+] Nettoyage des fichiers inutiles..."
+    rm -rf /var/lib/apt/lists/*
+    rm -rf /tmp/*
+    rm -rf /var/tmp/*
+    truncate -s 0 /var/log/*.log || true
+  SHELL
+end

@@ -1,0 +1,114 @@
+#!/bin/bash
+
+set -e
+
+function usage() {
+  echo "Usage:"
+  echo "  $0 up -n <cluster_name> -c <cni> -v <k8s_version> -w <workers> -m <build_mode>"
+  echo "  $0 destroy -n <cluster_name>"
+  echo "  $0 ssh -n <cluster_name> <node> | ssh <cluster_name-node>"
+  echo "  $0 list [-n <cluster_name>]"
+  echo "Options:"
+  echo "  -n <cluster_name>   Cluster name prefix (required for destroy)"
+  echo "  -c <cni>            CNI plugin: cilium | flannel (default: cilium)"
+  echo "  -v <k8s_version>    Kubernetes version (default: 1.32)"
+  echo "  -w <workers>        Number of worker nodes (default: 1)"
+  echo "  -m <build_mode>     Network mode: bridge_static | bridge_dyn | nat (default: bridge_static)"
+  echo ""
+  echo "For bridge_static and bridge_dyn, you have to set IPs in Vagrantfile"
+  exit 1
+}
+
+if [ $# -lt 1 ]; then
+  usage
+fi
+
+COMMAND=$1
+shift
+
+CLUSTER_NAME="k8s"
+CNI_PLUGIN="cilium"
+K8S_VERSION="1.32"
+NUM_WORKER_NODES="1"
+BUILD_MODE="BRIDGE_STATIC"
+
+while getopts ":n:c:v:w:m:" opt; do
+  case $opt in
+    n) CLUSTER_NAME="$OPTARG" ;;
+    c) CNI_PLUGIN="$OPTARG" ;;
+    v) K8S_VERSION="$OPTARG" ;;
+    w) NUM_WORKER_NODES="$OPTARG" ;;
+    m) BUILD_MODE="$OPTARG" ;;
+    *) usage ;;
+  esac
+done
+
+case $COMMAND in
+  up)
+    echo "[+] Starting new cluster '$CLUSTER_NAME' in $BUILD_MODE mode..."
+    echo "  Kubernetes version: $K8S_VERSION"
+    echo "  Workers: $NUM_WORKER_NODES"
+    echo "  CNI: $CNI_PLUGIN"
+    CNI_PLUGIN=$CNI_PLUGIN \
+    K8S_VERSION=$K8S_VERSION \
+    NUM_WORKER_NODES=$NUM_WORKER_NODES \
+    BUILD_MODE=$BUILD_MODE \
+    CLUSTER_NAME=$CLUSTER_NAME \
+    vagrant up
+    ;;
+
+  destroy)
+    if [ -z "$CLUSTER_NAME" ]; then
+      echo "[ERROR] Cluster name is required (-n)"
+      exit 1
+    fi
+    echo "[-] Destroying cluster '$CLUSTER_NAME'..."
+    NODES=$(find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
+      sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | grep "^$CLUSTER_NAME-" | sort)
+
+    for NODE in $NODES; do
+      echo "→ Destroying node $NODE"
+      CLUSTER_NAME=$CLUSTER_NAME vagrant destroy -f "$NODE"
+    done
+
+    ;;
+  ssh)
+    if [ -z "$1" ]; then
+      echo "[ERROR] Usage: $0 ssh <node> or $0 ssh -n <name> <node>"
+      exit 1
+    fi
+    if [ "$1" = "-n" ]; then
+      shift
+      CLUSTER_NAME="$1"
+      NODE="$2"
+      if [ -z "$CLUSTER_NAME" ] || [ -z "$NODE" ]; then
+        echo "[ERROR] Missing cluster name or node"
+        exit 1
+      fi
+    else
+      NODE="$1"
+      CLUSTER_NAME="${NODE%%-*}"
+    fi
+    echo "[+] Connecting to node '$NODE' (cluster: $CLUSTER_NAME)"
+    CLUSTER_NAME="$CLUSTER_NAME" vagrant ssh "$NODE"
+    ;;
+  list)
+    if [ "$1" == "all" ]; then
+      #echo "[+] Listing all nodes from all clusters:"
+      find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
+        sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | sort
+    elif [ -n "$CLUSTER_NAME" ]; then
+      #echo "[+] Listing nodes for cluster '$CLUSTER_NAME':"
+      find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
+        sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | grep "^$CLUSTER_NAME-" | sort
+    else
+      #echo "[+] Listing all available clusters:"
+      find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
+        sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | cut -d'-' -f1 | sort -u
+    fi
+    ;;
+
+  *)
+    usage
+    ;;
+esac
