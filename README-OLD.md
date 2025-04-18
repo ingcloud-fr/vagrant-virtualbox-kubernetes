@@ -15,7 +15,7 @@ They have Falco installed, necessary for some labs.
 
 ### With vagrant up
 
-Works out of the box (if you have built the image `jammy64-updated`):
+Works out of the box (if you have build the image `jammy64-updated`):
 
 ```bash
 $ vagrant up
@@ -29,7 +29,6 @@ With default values:
 - CNI_PLUGIN="cillium"
 - CLUSTER_NAME="k8s" (prefix)
 - UBUNTU_BOX="jammy-updated"
-- CONTAINER_RUNTIME="containerd"
 
 Or by passing environment variables at launch, for example to create a cluster named `dev`:
 
@@ -40,7 +39,7 @@ $ CLUSTER_NAME=dev vagrant up
 You can combine environment variables:
 
 ```bash
-$ CLUSTER_NAME=dev CNI_PLUGIN=flannel K8S_VERSION=1.31 BUILD_MODE=nat NUM_WORKER_NODES=2 UBUNTU_BOX=noble-updated CONTAINER_RUNTIME=containerd BRIDGE_STATIC_IP_START=192.168.99.100 vagrant up
+$ CLUSTER_NAME=dev CNI_PLUGIN=flannel K8S_VERSION=1.31 BUILD_MODE=nat NUM_WORKER_NODES=2 UBUNTU_BOX=noble-updated vagrant up
 ```
 
 To cleanly destroy the machines:
@@ -69,10 +68,10 @@ $ CLUSTER_NAME=dev vagrant ssh dev-node01
 
 Help with `--help`:
 
-```
+```bash
 $ ./vcluster --help
 Usage:
-  ./vcluster up -n <cluster_name> -c <cni> -v <k8s_version> -w <workers> -m <build_mode> [-i <ubuntu_box>] [-r <runtime>] [-a <ip_start>] [--dry-run]
+  ./vcluster up -n <cluster_name> -c <cni> -v <k8s_version> -w <workers> -m <build_mode>
   ./vcluster destroy -n <cluster_name>
   ./vcluster ssh -n <cluster_name> <node> | ssh <cluster_name-node>
   ./vcluster list [-n <cluster_name>]
@@ -82,12 +81,8 @@ Options:
   -v <k8s_version>    Kubernetes version (default: 1.32)
   -w <workers>        Number of worker nodes (default: 1)
   -m <build_mode>     Network mode: bridge_static | bridge_dyn | nat (default: bridge_static)
-  -i <ubuntu_box>     Ubuntu base image (default: jammy64-updated)
-  -r <runtime>        Container runtime: containerd | docker (default: containerd)
-  -a <ip_start>       Static IP start for bridge_static mode (default: 192.168.1.200)
-  --dry-run           Only show the command, do not launch Vagrant
 
-For bridge_dyn, you have to set IPs in the Vagrantfile
+For bridge_static and bridge_dyn, you have to set IPs in the Vagrantfile
 ```
 
 Start a cluster with default values:
@@ -102,22 +97,10 @@ Equivalent to:
 $ ./vcluster up -n k8s -c cillium -w 1 -v 1.32
 ```
 
-Example: Create a cluster named `dev` with 3 nodes (1 controlplane + 2 workers), using *flannel* as CNI, Kubernetes v1.31 in *NAT* mode, with Ubuntu 24.04 and Docker runtime:
+Example: Create a cluster named `dev` with 3 nodes (1 controlplane + 2 workers), using *flannel* as CNI, Kubernetes v1.31 in *NAT* mode:
 
 ```bash
-$ ./vcluster up -n dev -c flannel -v 1.31 -w 2 -m nat -i noble-updated -r docker
-```
-
-Specify a custom static IP range (for bridge_static):
-
-```bash
-$ ./vcluster up -n dev -m bridge_static -a 192.168.99.100
-```
-
-Dry-run example (show command only):
-
-```bash
-$ ./vcluster up -n dev -c flannel -v 1.31 -w 2 -m nat -i noble-updated -r docker --dry-run
+$ ./vcluster up -n dev -c flannel -v 1.31 -w 2 -m nat
 ```
 
 List clusters:
@@ -144,30 +127,6 @@ Or:
 $ ./vcluster ssh -n <cluster_name> <node>
 ```
 
-## 📂 Container Runtime
-
-You can choose which container runtime to install via the `CONTAINER_RUNTIME` environment variable:
-
-- `containerd`: installs containerd from the **distribution's default repositories** (default behavior if not set)
-- `docker`: installs **Docker Engine + containerd.io** from the Docker repositories
-
-### Examples:
-
-Install using the default (containerd):
-```bash
-$ vagrant up
-```
-
-Install using Docker Engine and containerd.io:
-```bash
-$ CONTAINER_RUNTIME=docker vagrant up
-```
-
-Install using only containerd from Ubuntu:
-```bash
-$ CONTAINER_RUNTIME=containerd vagrant up
-```
-
 ## Other
 
 You can specify another Ubuntu image (may not work):
@@ -188,7 +147,6 @@ or modify it directly in the **Vagrantfile**
 - Automatic `kubectl` configuration
 - Support for **NAT**, **BRIDGE_STATIC**, and **BRIDGE_DYN**
 - Choice of **CNI** (`flannel` or `cilium + WireGuard encryption`)
-- Choice of **container runtime** (`containerd` or `docker`)
 - Automatic generation of the `kubeadm join` command
 
 ## 🛠 Minimum Dependencies
