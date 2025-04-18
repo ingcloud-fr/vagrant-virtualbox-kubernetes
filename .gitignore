@@ -7,3 +7,5 @@ id_rsa*
 admin.conf
 authorized_keys*
 hosts*
+labs/
+cks/
