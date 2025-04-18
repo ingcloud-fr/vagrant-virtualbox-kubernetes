@@ -1,9 +1,12 @@
 
 # → build + mise à jour
 
+
+
 ```
-$ vagrant destroy -f 
-$ rm jammy64-updated.box
+$ cd build_image_jammy
+$ vagrant destroy -f      # if needed
+$ rm jammy64-updated.box  # if needed
 $ vagrant up       
 $ vagrant halt      
 $ vagrant package --output jammy64-updated.box
