@@ -5,6 +5,10 @@ set -euo pipefail
 # 02-containerd.sh : Installation de containerd
 # ===========================================
 
+export DEBIAN_FRONTEND=noninteractive
+
+echo "⚙️  Installating containerd ..."
+
 # Installation du runtime containerd uniquement
 apt-get install -y containerd
 

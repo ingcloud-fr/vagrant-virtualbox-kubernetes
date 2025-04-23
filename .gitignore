@@ -9,3 +9,6 @@ authorized_keys*
 hosts*
 lab*/
 cks*/
+*.yaml
+*.env
+.env.*

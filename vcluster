@@ -4,22 +4,23 @@ set -e
 
 function usage() {
   echo "Usage:"
-  echo "  $0 up -n <cluster_name> -c <cni> -v <k8s_version> -w <workers> -m <build_mode> [-i <ubuntu_box>] [-r <runtime>] [-a <ip_start>] [--dry-run]"
+  echo "  $0 up -n <cluster_name> [-c <cni>] [-v <k8s_version>] [-w <workers>] [-m <build_mode>] [-i <ubuntu_box>] [-r <runtime>] [-a <ip_start>] [-p <num_controlplanes[:VIP]>] [-x <extra>] [--dry-run]"
   echo "  $0 destroy -n <cluster_name>"
   echo "  $0 ssh -n <cluster_name> <node> | ssh <cluster_name-node>"
-  echo "  $0 list [-n <cluster_name>]"
+  echo "  $0 list [all] [-n <cluster_name>]"
+  echo "  $0 halt -n <cluster_name>"
   echo "Options:"
-  echo "  -n <cluster_name>   Cluster name prefix (required for up, destroy)"
+  echo "  -n <cluster_name>   Cluster name prefix (required for up and destroy)"
   echo "  -c <cni>            CNI plugin: cilium | flannel (default: cilium)"
   echo "  -v <k8s_version>    Kubernetes version (default: 1.32)"
   echo "  -w <workers>        Number of worker nodes (default: 1)"
   echo "  -m <build_mode>     Network mode: bridge_static | bridge_dyn | nat (default: bridge_static)"
-  echo "  -i <ubuntu_box>     Ubuntu box image to use (default: jammy64-updated)"
+  echo "  -i <ubuntu_box>     Ubuntu box image (default: jammy64-updated)"
   echo "  -r <runtime>        Container runtime: containerd | docker (default: docker)"
-  echo "  -a <ip_start>       Static IP start address for bridge_static (default: 192.168.1.200)"
+  echo "  -a <ip_start>       Static IP start address for bridge_static/net (default: 192.168.1.200)"
+  echo "  -p <num[:VIP]>      Number of control planes and optional VIP (only in bridge_static and nat)"
+  echo "  -x <extra>          Number of extra nodes without Kubernetes (default: 0)"
   echo "  --dry-run           Show the command without executing it"
-  echo ""
-  echo "For bridge_dyn, you have to set IPs in the Vagrantfile"
   exit 1
 }
 
@@ -30,24 +31,25 @@ fi
 COMMAND=$1
 shift
 
-CLUSTER_NAME="k8s"
+# Default values
 CNI_PLUGIN="cilium"
 K8S_VERSION="1.32"
 NUM_WORKER_NODES="1"
 BUILD_MODE="bridge_static"
 UBUNTU_BOX="jammy64-updated"
 CONTAINER_RUNTIME="docker"
-BRIDGE_STATIC_IP_START="192.168.1.200"
+IP_START="192.168.1.200"
+NUM_CONTROLPLANE="1"
+CONTROLPLANE_VIP=""
+NUM_EXTRA_NODES="0"
 DRY_RUN=false
+CLUSTER_NAME=""
 
-# Manual parsing for long options and getopts
+# Parsing options
 POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dry-run)
-      DRY_RUN=true
-      shift
-      ;;
+    --dry-run) DRY_RUN=true; shift ;;
     -n) CLUSTER_NAME="$2"; shift 2 ;;
     -c) CNI_PLUGIN="$2"; shift 2 ;;
     -v) K8S_VERSION="$2"; shift 2 ;;
@@ -55,86 +57,211 @@ while [[ $# -gt 0 ]]; do
     -m) BUILD_MODE="$2"; shift 2 ;;
     -i) UBUNTU_BOX="$2"; shift 2 ;;
     -r) CONTAINER_RUNTIME="$2"; shift 2 ;;
-    -a) BRIDGE_STATIC_IP_START="$2"; shift 2 ;;
+    -a) IP_START="$2"; shift 2 ;;
+    -x) NUM_EXTRA_NODES="$2"; shift 2 ;;
+    -p)
+      if [[ "$2" =~ ^([0-9]+)(:([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+))?$ ]]; then
+        NUM_CONTROLPLANE="${BASH_REMATCH[1]}"
+        CONTROLPLANE_VIP="${BASH_REMATCH[3]}"
+      else
+        echo "🔴  Invalid -p argument format. Expected: -p <num[:VIP]>"
+        exit 1
+      fi
+      shift 2 ;;
     *) POSITIONAL_ARGS+=("$1"); shift ;;
   esac
 done
 
 set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
 
+# Chargement automatique du contexte pour les commandes autres que 'up'
+if [[ "$COMMAND" != "up" ]]; then
+  if [ -z "$CLUSTER_NAME" ] && [ -f .env ]; then
+    source .env
+  elif [ -f ".env.$CLUSTER_NAME" ]; then
+    source ".env.$CLUSTER_NAME"
+  fi
+fi
+
 case $COMMAND in
   up)
-    echo "[+] Starting new cluster ..."
-    echo "  Name (prefix): $CLUSTER_NAME"
-    echo "  Mode: $BUILD_MODE"
-    echo "  Kubernetes version: $K8S_VERSION"
-    echo "  Workers: $NUM_WORKER_NODES"
-    echo "  CNI: $CNI_PLUGIN"
-    echo "  Ubuntu box: $UBUNTU_BOX"
-    echo "  Container runtime: $CONTAINER_RUNTIME"
-    echo "  Bridge static IP start: $BRIDGE_STATIC_IP_START"
-    if $DRY_RUN; then
-      echo "[DRY-RUN] Command that would be executed:"
-      echo "CNI_PLUGIN=$CNI_PLUGIN K8S_VERSION=$K8S_VERSION NUM_WORKER_NODES=$NUM_WORKER_NODES BUILD_MODE=$BUILD_MODE CLUSTER_NAME=$CLUSTER_NAME UBUNTU_BOX=$UBUNTU_BOX CONTAINER_RUNTIME=$CONTAINER_RUNTIME BRIDGE_STATIC_IP_START=$BRIDGE_STATIC_IP_START vagrant up"
+    if [ -z "$CLUSTER_NAME" ]; then
+      echo "🔴  Cluster name is required (-n)"
+      exit 1
+    fi
+
+    ENV_FILE=".env.$CLUSTER_NAME"
+    if [ ! -f "$ENV_FILE" ]; then
+      echo "⚙️  Building new cluster ..."
+      # Exporter le contexte dans un fichier .env
+      echo "CLUSTER_NAME=\"$CLUSTER_NAME\"" > .env."$CLUSTER_NAME"
+      echo "NUM_CONTROLPLANE=\"$NUM_CONTROLPLANE\"" >> .env."$CLUSTER_NAME"
+      if [ "$NUM_CONTROLPLANE" -gt 1 ]; then
+        echo "CONTROLPLANE_VIP=\"$CONTROLPLANE_VIP\"" >> .env."$CLUSTER_NAME"
+      fi
+      echo "NUM_WORKER_NODES=\"$NUM_WORKER_NODES\"" >> .env."$CLUSTER_NAME"
+      echo "NUM_EXTRA_NODES=\"$NUM_EXTRA_NODES\"" >> .env."$CLUSTER_NAME"
+      echo "CNI_PLUGIN=\"$CNI_PLUGIN\"" >> .env."$CLUSTER_NAME"
+      echo "K8S_VERSION=\"$K8S_VERSION\"" >> .env."$CLUSTER_NAME"
+      echo "BUILD_MODE=\"$BUILD_MODE\"" >> .env."$CLUSTER_NAME"
+      echo "UBUNTU_BOX=\"$UBUNTU_BOX\"" >> .env."$CLUSTER_NAME"
+      echo "CONTAINER_RUNTIME=\"$CONTAINER_RUNTIME\"" >> .env."$CLUSTER_NAME"
+      if [ "$BUILD_MODE" != "nat" ]; then
+        echo "IP_START=\"$IP_START\"" >> .env."$CLUSTER_NAME"
+      fi
     else
+      source "$ENV_FILE"
+      CLUSTER_NAME=$CLUSTER_NAME \
+      NUM_CONTROLPLANE=$NUM_CONTROLPLANE \
+      CONTROLPLANE_VIP=$CONTROLPLANE_VIP \
+      NUM_WORKER_NODES=$NUM_WORKER_NODES \
+      NUM_EXTRA_NODES=$NUM_EXTRA_NODES \
+      BUILD_MODE=$BUILD_MODE \
+      UBUNTU_BOX=$UBUNTU_BOX \
+      CONTAINER_RUNTIME=$CONTAINER_RUNTIME \
+      IP_START=$IP_START \
+      echo "🚀  Starting cluster ..."
+    fi
+    echo "  Name: $CLUSTER_NAME"
+    echo "  ControlPlanes: $NUM_CONTROLPLANE"
+    if [ "$NUM_CONTROLPLANE" -gt 1 ]; then
+      echo "  VIP: ${CONTROLPLANE_VIP:-auto}"
+    fi
+    echo "  Workers: $NUM_WORKER_NODES"
+    echo "  Extra nodes: $NUM_EXTRA_NODES"
+    echo "  CNI: $CNI_PLUGIN"
+    echo "  Kubernetes version: $K8S_VERSION"
+    echo "  Runtime: $CONTAINER_RUNTIME"
+    echo "  Box: $UBUNTU_BOX"
+    echo "  Mode: $BUILD_MODE"
+    #echo "  IP start: $IP_START"
+    if [ "$BUILD_MODE" != "nat" ]; then
+        echo "IP_START=\"$IP_START\"" >> .env."$CLUSTER_NAME"
+    fi
+
+    if $DRY_RUN; then
+      echo "[DRY-RUN] Vagrant up command that would be executed :"
+      echo "CLUSTER_NAME=$CLUSTER_NAME K8S_VERSION=$K8S_VERSION CNI_PLUGIN=$CNI_PLUGIN NUM_WORKER_NODES=$NUM_WORKER_NODES NUM_CONTROLPLANE=$NUM_CONTROLPLANE NUM_EXTRA_NODES=$NUM_EXTRA_NODES BUILD_MODE=$BUILD_MODE UBUNTU_BOX=$UBUNTU_BOX CONTAINER_RUNTIME=$CONTAINER_RUNTIME IP_START=$IP_START vagrant up"
+    else
+      NUM_CONTROLPLANE=$NUM_CONTROLPLANE \
+      CONTROLPLANE_VIP="$CONTROLPLANE_VIP" \
       CNI_PLUGIN=$CNI_PLUGIN \
       K8S_VERSION=$K8S_VERSION \
       NUM_WORKER_NODES=$NUM_WORKER_NODES \
+      NUM_EXTRA_NODES=$NUM_EXTRA_NODES \
       BUILD_MODE=$BUILD_MODE \
       CLUSTER_NAME=$CLUSTER_NAME \
       UBUNTU_BOX=$UBUNTU_BOX \
       CONTAINER_RUNTIME=$CONTAINER_RUNTIME \
-      BRIDGE_STATIC_IP_START=$BRIDGE_STATIC_IP_START \
+      IP_START=$IP_START \
       vagrant up
     fi
     ;;
 
-  destroy)
+  halt)
     if [ -z "$CLUSTER_NAME" ]; then
-      echo "[ERROR] Cluster name is required (-n)"
+      echo "🔴  Cluster name is required (-n)"
       exit 1
     fi
-    echo "[-] Destroying cluster '$CLUSTER_NAME'..."
-    NODES=$(find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
-      sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | grep "^$CLUSTER_NAME-" | sort)
+    echo "💤  Halting cluster '$CLUSTER_NAME'..."
+    ENV_FILE=".env.$CLUSTER_NAME"
+    if [ ! -f "$ENV_FILE" ]; then
+      echo "🔴  Could not find environment file: $ENV_FILE"
+      exit 1
+    fi
 
-    for NODE in $NODES; do
-      echo "→ Destroying node $NODE"
-      CLUSTER_NAME=$CLUSTER_NAME vagrant destroy -f "$NODE"
-    done
+    source "$ENV_FILE"
+    CLUSTER_NAME=$CLUSTER_NAME \
+    NUM_CONTROLPLANE=$NUM_CONTROLPLANE \
+    CONTROLPLANE_VIP=$CONTROLPLANE_VIP \
+    NUM_WORKER_NODES=$NUM_WORKER_NODES \
+    NUM_EXTRA_NODES=$NUM_EXTRA_NODES \
+    BUILD_MODE=$BUILD_MODE \
+    UBUNTU_BOX=$UBUNTU_BOX \
+    CONTAINER_RUNTIME=$CONTAINER_RUNTIME \
+    IP_START=$IP_START \
+    vagrant halt
+    ;;
+
+  destroy)
+    if [ -z "$CLUSTER_NAME" ]; then
+      echo "🔴  Cluster name is required (-n)"
+      exit 1
+    fi
+    echo "💣  Destroying cluster '$CLUSTER_NAME'..."
+    # NODES=$(find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
+    #   sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | grep "^$CLUSTER_NAME-" | sort)
+    # for NODE in $NODES; do
+    #   echo "→ Destroying node $NODE"
+    #   vagrant destroy -f "$NODE"
+    # done
+
+    ENV_FILE=".env.$CLUSTER_NAME"
+    if [ ! -f "$ENV_FILE" ]; then
+      echo "🔴  Could not find environment file: $ENV_FILE"
+      exit 1
+    fi
+
+    source "$ENV_FILE"
+    CLUSTER_NAME=$CLUSTER_NAME \
+    NUM_CONTROLPLANE=$NUM_CONTROLPLANE \
+    CONTROLPLANE_VIP=$CONTROLPLANE_VIP \
+    NUM_WORKER_NODES=$NUM_WORKER_NODES \
+    NUM_EXTRA_NODES=$NUM_EXTRA_NODES \
+    BUILD_MODE=$BUILD_MODE \
+    UBUNTU_BOX=$UBUNTU_BOX \
+    CONTAINER_RUNTIME=$CONTAINER_RUNTIME \
+    IP_START=$IP_START \
+    vagrant destroy -f
+
+    rm -f $ENV_FILE
     ;;
 
   ssh)
-    if [ -z "$1" ]; then
-      echo "[ERROR] Usage: $0 ssh <node> or $0 ssh -n <name> <node>"
-      exit 1
-    fi
     if [ "$1" = "-n" ]; then
       shift
       CLUSTER_NAME="$1"
       NODE="$2"
-      if [ -z "$CLUSTER_NAME" ] || [ -z "$NODE" ]; then
-        echo "[ERROR] Missing cluster name or node"
-        exit 1
-      fi
     else
       NODE="$1"
       CLUSTER_NAME="${NODE%%-*}"
     fi
-    echo "[+] Connecting to node '$NODE' (cluster: $CLUSTER_NAME)"
-    CLUSTER_NAME="$CLUSTER_NAME" vagrant ssh "$NODE"
+
+    ENV_FILE=".env.$CLUSTER_NAME"
+    if [ ! -f "$ENV_FILE" ]; then
+      echo "🔴  Could not find environment file: $ENV_FILE"
+      exit 1
+    fi
+
+    source "$ENV_FILE"
+
+    echo "🔌 Connecting to node '$NODE' (cluster: $CLUSTER_NAME)"
+
+    CLUSTER_NAME=$CLUSTER_NAME \
+    NUM_CONTROLPLANE=$NUM_CONTROLPLANE \
+    CONTROLPLANE_VIP=$CONTROLPLANE_VIP \
+    NUM_WORKER_NODES=$NUM_WORKER_NODES \
+    NUM_EXTRA_NODES=$NUM_EXTRA_NODES \
+    BUILD_MODE=$BUILD_MODE \
+    UBUNTU_BOX=$UBUNTU_BOX \
+    CONTAINER_RUNTIME=$CONTAINER_RUNTIME \
+    IP_START=$IP_START \
+    vagrant ssh "$NODE"
     ;;
 
   list)
     if [ "$1" == "all" ]; then
+      #echo "List of all the VM :"
       find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
         sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | sort
     elif [ -n "$CLUSTER_NAME" ]; then
+      #echo "List of VM in $CLUSTER_NAME :"
       find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
         sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | grep "^$CLUSTER_NAME-" | sort
     else
+      #echo "Clusters list :"
       find .vagrant/machines -mindepth 3 -maxdepth 3 -name "id" | \
-        sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | cut -d'-' -f1 | sort -u
+        sed -E 's|\.vagrant/machines/||; s|/virtualbox/id||' | cut -d- -f1 | sort -u
     fi
     ;;
 

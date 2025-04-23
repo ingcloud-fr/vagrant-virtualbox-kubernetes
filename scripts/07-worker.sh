@@ -11,17 +11,19 @@ JOIN_SCRIPT="/vagrant/join-${CLUSTER_NAME}.sh"
 # Récupération de l'IP locale (exporté dans 01)
 MY_IP=$(grep PRIMARY_IP /etc/environment | cut -d= -f2)
 
+echo "⚙️  Installating a worker node ..."
+
 # Ajout de l'entrée dans le fichier partagé /vagrant/hosts
 if [ -f /vagrant/hosts ]; then
   echo "$MY_IP $(hostname)" >> /vagrant/hosts
 fi
 
-# Copie des clés ssh crées sur le controlplane
-cat /vagrant/id_rsa.vagrant.${CLUSTER_NAME}.pub >> /home/vagrant/.ssh/authorized_keys
-chmod 600 /home/vagrant/.ssh/authorized_keys
-cat /vagrant/id_rsa.root.${CLUSTER_NAME}.pub >> /root/.ssh/authorized_keys
-cat /vagrant/id_rsa.vagrant.${CLUSTER_NAME}.pub >> /root/.ssh/authorized_keys
-chmod 600 /root/.ssh/authorized_keys
+# # Copie des clés ssh crées sur le controlplane
+# cat /vagrant/id_rsa.vagrant.${CLUSTER_NAME}.pub >> /home/vagrant/.ssh/authorized_keys
+# chmod 600 /home/vagrant/.ssh/authorized_keys
+# cat /vagrant/id_rsa.root.${CLUSTER_NAME}.pub >> /root/.ssh/authorized_keys
+# cat /vagrant/id_rsa.vagrant.${CLUSTER_NAME}.pub >> /root/.ssh/authorized_keys
+# chmod 600 /root/.ssh/authorized_keys
 
 # Attente que le script de jointure soit disponible
 echo "[+] Attente du script de jointure ($JOIN_SCRIPT)..."
@@ -60,4 +62,4 @@ fi
 # Exécution du script de jointure
 bash "$JOIN_SCRIPT" || exit 1
 
-echo "✅ Noeud WORKER joint au cluster Kubernetes avec succès."
+echo "🏁 WORKER node $(hostname) successfully joined the Kubernetes cluster !"

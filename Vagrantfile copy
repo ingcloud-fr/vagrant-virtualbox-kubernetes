@@ -6,6 +6,13 @@
 # =============================
 
 # Mode de déploiement :
+# "BRIDGE_STATIC/bridge_static"   - Place les VMs sur ton réseau local, ce qui permet d'accéder aux NodePorts depuis un navigateur.
+#                                   Il faut avoir suffisamment d'adresses IP libres sur ton LAN.
+# "BRIDGE_DYN/bridge_dyn"          - Place les VMs sur ton réseau local, ce qui permet d'accéder aux NodePorts depuis un navigateur.
+#                                    Avec DHCP.
+# "NAT/nat                          - Place les VMs dans un réseau privé. Les NodePorts ne sont pas accessibles
+#                                   sauf si tu configures un port forwarding pour chaque port souhaité.
+#                                   À utiliser si le mode BRIDGE ne fonctionne pas.
 BUILD_MODE = (ENV['BUILD_MODE'] || "BRIDGE_STATIC").upcase
 
 # Image Ubuntu 
@@ -38,40 +45,36 @@ NUM_WORKER_NODES = (ENV['NUM_WORKER_NODES'] || 1).to_i
 # Nombre de nœuds extra à créer (sans kubernetes)
 NUM_EXTRA_NODES = (ENV['NUM_EXTRA_NODES'] || 0).to_i
 
-# Paramètres réseau utilisés les modes BRIDGE_STATIC et NAT
-IP_START = ENV['IP_START'] || "192.168.1.200" # Début des IPs statiques
+# Paramètres réseau utilisés uniquement pour le mode BRIDGE_STATIC 
+BRIDGE_STATIC_IP_START = ENV['BRIDGE_STATIC_IP_START'] || "192.168.1.200" # Début des IPs statiques pour BRIDGE_STATIC
+
+# Paramètres réseau utilisés uniquement pour le mode NAT 
+NAT_IP_START="10.10.56.100"
+IP_NW = "192.168.56"   # Le network
+MASTER_IP_START = 11   # L'adresse IP du masterplane
+NODE_IP_START = 20     # L'adresse de départ des workers
 
 # If VIP_CONTROLPLANE is not set
 $vip_adjustment_done = false
 if NUM_CONTROLPLANE > 1 && (ENV['CONTROLPLANE_VIP'].nil? || ENV['CONTROLPLANE_VIP'].strip.empty?) && !$vip_adjustment_done
-  CONTROLPLANE_VIP = IP_START
-  # Décale IP_START de +1 pour ne pas chevaucher la VIP
-  base = IP_START.rpartition('.')[0]
-  last = IP_START.rpartition('.')[2].to_i + 1
-  IP_START = "#{base}.#{last}"
-  # puts "ℹ️ VIP not specified — using #{CONTROLPLANE_VIP} as CONTROLPLANE_VIP and shifting IP_START to #{IP_START}"
+  CONTROLPLANE_VIP = BRIDGE_STATIC_IP_START
+  # Décale BRIDGE_STATIC_IP_START de +1 pour ne pas chevaucher la VIP
+  base = BRIDGE_STATIC_IP_START.rpartition('.')[0]
+  last = BRIDGE_STATIC_IP_START.rpartition('.')[2].to_i + 1
+  BRIDGE_STATIC_IP_START = "#{base}.#{last}"
+  # puts "ℹ️ VIP not specified — using #{CONTROLPLANE_VIP} as CONTROLPLANE_VIP and shifting BRIDGE_STATIC_IP_START to #{BRIDGE_STATIC_IP_START}"
   $vip_adjustment_done = true
 end
 
 def static_ip(offset)
-  base = IP_START.rpartition('.')[0]
-  last = IP_START.rpartition('.')[2].to_i + offset
+  base = BRIDGE_STATIC_IP_START.rpartition('.')[0]
+  last = BRIDGE_STATIC_IP_START.rpartition('.')[2].to_i + offset
   return "#{base}.#{last}"
 end
 
 def get_bridge_adapter()
   iface = %x{ip route | grep default | awk '{print $5}' | grep -Ev 'tun0|docker0|virbr0|br-' | head -n1}.chomp
   return iface
-end
-
-
-def maybe_wait_bridge_dyn()
-  sleep 2 if BUILD_MODE == "BRIDGE_DYN"
-end
-
-# === Helper pour générer une MAC unique (VirtualBox prefix)
-def generate_mac()
-  "080027%06x" % rand(0xffffff)
 end
 
 # Création d'un paire de clé ssh
@@ -95,12 +98,6 @@ Vagrant.configure("2") do |config|
   # =============================
   # VM HAProxy pour VIP Kubernetes (uniquement si multi-controlplane)
   # =============================
-
-  if BUILD_MODE == "BRIDGE_DYN" && NUM_CONTROLPLANE > 1
-    abort("❌ Multi-controlplane mode is not supported with BUILD_MODE=BRIDGE_DYN.\n" \
-          "➡️  Please use bridge_static or nat.")
-  end
-
   if NUM_CONTROLPLANE > 1 # On n'installe une VM HAProxy que s'il y a plus d'un controlplane
     config.vm.define "#{CLUSTER_NAME}-haproxy-vip" do |node|
       node.vm.provider "virtualbox" do |vb|
@@ -115,15 +112,15 @@ Vagrant.configure("2") do |config|
       elsif BUILD_MODE == "BRIDGE_STATIC"
         node.vm.network :public_network, ip: CONTROLPLANE_VIP, bridge: get_bridge_adapter()
       else # NAT
-        node.vm.network :private_network, ip: CONTROLPLANE_VIP
-        node.vm.network "forwarded_port", guest: 22, host: 2709
+        node.vm.network :private_network, ip: IP_NW + ".#{MASTER_IP_START - 1}"
+        node.vm.network "forwarded_port", guest: 22, host: "#{2709}"
       end
 
       node.vm.provision "haproxy", type: "shell", path: "scripts/02-haproxy-vip.sh",
         env: {
           "CONTROLPLANE_VIP" => CONTROLPLANE_VIP,
           "NUM_CONTROLPLANE" => NUM_CONTROLPLANE.to_s,
-          "IP_START" => IP_START
+          "BRIDGE_STATIC_IP_START" => BRIDGE_STATIC_IP_START
         }
       node.vm.provision "08-ssh-access", type: "shell", path: "scripts/08-ssh-access.sh", env: {"CLUSTER_NAME" => CLUSTER_NAME}
     end
@@ -144,22 +141,16 @@ Vagrant.configure("2") do |config|
       node.vm.hostname = "#{CLUSTER_NAME}-controlplane0#{i}"
 
       if BUILD_MODE == "BRIDGE_DYN"
-        #node.vm.network :public_network, bridge: get_bridge_adapter()
-        node.vm.network :public_network,
-          bridge: get_bridge_adapter(),
-          use_dhcp_assigned_default_route: true,
-          mac: generate_mac(),
-          auto_config: false
+        node.vm.network :public_network, bridge: get_bridge_adapter()
       elsif BUILD_MODE == "BRIDGE_STATIC"
         node.vm.network :public_network, ip: static_ip(i-1), bridge: get_bridge_adapter()
       else # NAT
-        node.vm.network :private_network, ip: static_ip(i-1)
-        node.vm.network "forwarded_port", guest: 22, host: 2710 + i
+        node.vm.network :private_network, ip: IP_NW + ".#{MASTER_IP_START}"
+        node.vm.network "forwarded_port", guest: 22, host: "#{2710}"
       end
 
       # === Provisioning par scripts ===
-      # node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh"
-      node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh",  env: {"BUILD_MODE" => BUILD_MODE}
+      node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh"
       if CONTAINER_RUNTIME == "docker"
         node.vm.provision "02-containerd-docker", type: "shell", path: "scripts/03-containerd-docker.sh"
       else
@@ -174,7 +165,7 @@ Vagrant.configure("2") do |config|
           "CLUSTER_NAME" => CLUSTER_NAME,
           "CONTROLPLANE_VIP" => CONTROLPLANE_VIP,
           "NUM_CONTROLPLANE" => NUM_CONTROLPLANE,
-          "IP_START" => IP_START}
+          "BRIDGE_STATIC_IP_START" => BRIDGE_STATIC_IP_START}
       end
       if NUM_CONTROLPLANE > 1 && i > 1 # Autres controlplane
         node.vm.provision "06-secondary-controlplane", type: "shell", path: "scripts/06-secondary-controlplane-join.sh",
@@ -182,7 +173,8 @@ Vagrant.configure("2") do |config|
       end
       node.vm.provision "08-ssh-access", type: "shell", path: "scripts/08-ssh-access.sh", env: {"CLUSTER_NAME" => CLUSTER_NAME}
     end
-    
+    #node.vm.provision "07-sync-hosts", type: "shell", path: "scripts/07-sync-hosts.sh"
+
     ## 📝 Export des variables dans un fichier que les scripts peuvent sourcer
     ## Utilisation dans node : [ -f /etc/env-k8s-vars ] && source /etc/env-k8s-vars
     # config.vm.provision "shell", privileged: true, inline: <<-SHELL
@@ -197,6 +189,9 @@ Vagrant.configure("2") do |config|
     # EOF
     #   chmod +x /etc/env-k8s-vars
     # SHELL
+
+
+
   end
 
   # =============================
@@ -212,22 +207,16 @@ Vagrant.configure("2") do |config|
       node.vm.hostname = "#{CLUSTER_NAME}-node0#{i}"
 
       if BUILD_MODE == "BRIDGE_DYN"
-        #node.vm.network :public_network, bridge: get_bridge_adapter()
-        node.vm.network :public_network,
-          bridge: get_bridge_adapter(),
-          use_dhcp_assigned_default_route: true,
-          mac: generate_mac(),
-          auto_config: false
+        node.vm.network :public_network, bridge: get_bridge_adapter()
       elsif BUILD_MODE == "BRIDGE_STATIC"
         node.vm.network :public_network, ip: static_ip(i-1+NUM_CONTROLPLANE), bridge: get_bridge_adapter()
-      else # NAT
-        node.vm.network :private_network, ip: static_ip(i-1+NUM_CONTROLPLANE)
-        node.vm.network "forwarded_port", guest: 22, host: 2720 + i
+      else
+        node.vm.network :private_network, ip: IP_NW + ".#{NODE_IP_START + i}"
+        node.vm.network "forwarded_port", guest: 22, host: "#{2720 + i}"
       end
 
       # === Provisioning par scripts ===
-      # node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh"
-      node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh",  env: {"BUILD_MODE" => BUILD_MODE}
+      node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh"
       if CONTAINER_RUNTIME == "docker"
         node.vm.provision "03-containerd-docker", type: "shell", path: "scripts/03-containerd-docker.sh"
       else
@@ -252,22 +241,16 @@ Vagrant.configure("2") do |config|
       node.vm.hostname = "#{CLUSTER_NAME}-extra0#{i}"
 
       if BUILD_MODE == "BRIDGE_DYN"
-        #node.vm.network :public_network, bridge: get_bridge_adapter()
-        node.vm.network :public_network,
-          bridge: get_bridge_adapter(),
-          use_dhcp_assigned_default_route: true,
-          mac: generate_mac(),
-          auto_config: false
+        node.vm.network :public_network, bridge: get_bridge_adapter()
       elsif BUILD_MODE == "BRIDGE_STATIC"
         node.vm.network :public_network, ip: static_ip(i-1+NUM_CONTROLPLANE+NUM_WORKER_NODES), bridge: get_bridge_adapter()
       else
-        node.vm.network :private_network, ip: static_ip(i-1+NUM_CONTROLPLANE+NUM_WORKER_NODES)
-        node.vm.network "forwarded_port", guest: 22, host: 2730 + i
+        node.vm.network :private_network, ip: IP_NW + ".#{NODE_IP_START + i}"
+        node.vm.network "forwarded_port", guest: 22, host: "#{2720 + i}"
       end
 
       # === Provisioning par scripts ===
-      # node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh"
-      node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh",  env: {"BUILD_MODE" => BUILD_MODE}
+      node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh"
       node.vm.provision "08-ssh-access", type: "shell", path: "scripts/08-ssh-access.sh", env: {"CLUSTER_NAME" => CLUSTER_NAME}
       node.vm.provision "09-extra-node", type: "shell", path: "scripts/09-extra-node.sh"
     end
