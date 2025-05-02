@@ -215,7 +215,7 @@ EOF
 
   # Enable Hubble
   su - vagrant -c "cilium hubble enable"
-  echo "💡  Hubble is enabled ! To use it : $ sudo hubble observe --server unix:///var/run/cilium/hubble.sock -f"
+  echo "💡  Hubble is enabled ! To use it forward port and launch hubble : $ cilium hubble port-forward & AND $ hubble observe"
 
 else
   echo "🛑 CNI '$CNI_PLUGIN' unkown."

@@ -12,3 +12,5 @@ cks*/
 *.yaml
 *.env
 .env.*
+kubeadm-config.yaml
+ssh-keys/
