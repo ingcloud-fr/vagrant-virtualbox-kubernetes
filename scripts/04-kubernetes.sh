@@ -8,8 +8,6 @@ set -e
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo "⚙️  Installating kubelet kubeadm kubectl ..."
-
 # Version par défaut si non transmise en variable d'env
 K8S_VERSION=${K8S_VERSION:-1.32}
 
@@ -17,12 +15,12 @@ K8S_VERSION=${K8S_VERSION:-1.32}
 MY_IP=$(grep PRIMARY_IP /etc/environment | cut -d= -f2)
 
 # --- Désactivation du swap ---
-echo "ℹ️  Disable swap"
+echo "🔧  Disabling swap..."
 swapoff -a
 sed -i '/ swap / s/^/#/' /etc/fstab
 
 
-echo "ℹ️  Installing kubelet kubeadm kubectl"
+echo "📦  Installing kubelet kubeadm kubectl"
 # Préparation du dossier
 sudo mkdir -p /etc/apt/keyrings
 

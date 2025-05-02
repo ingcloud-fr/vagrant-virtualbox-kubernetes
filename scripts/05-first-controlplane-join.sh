@@ -71,6 +71,7 @@ CERT_KEY=$(kubeadm init phase upload-certs --upload-certs | tail -1)
 
 if [ "$NUM_CONTROLPLANE" -gt 1 ]; then
   # Génération du script de join pour les autres controlplanes
+  echo "🛠️  Creating join script for secondary controlplanes ..." 
   JOIN_CONTROLPLANE="kubeadm join ${CONTROLPLANE_VIP}:6443 --control-plane --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH} --certificate-key ${CERT_KEY}"
   echo "$JOIN_CONTROLPLANE" > /vagrant/join-controlplane-${CLUSTER_NAME}.sh
   cat <<EOF > /vagrant/join-controlplane-${CLUSTER_NAME}.sh
@@ -82,7 +83,8 @@ EOF
 fi
 # NOTE : the ending "\$@" allow secondary controlplan to pass argument when invoking the script (as --apiserver-advertise-address=xxx)
 
-# Génération du script de join pour les workers 
+# Génération du script de join pour les workers
+echo "🛠️  Creating join script for workers ..."  
 JOIN_WORKER="kubeadm join ${ADVERTISE_IP}:6443 --token ${TOKEN} --discovery-token-ca-cert-hash ${HASH}"
 echo "$JOIN_WORKER" > /vagrant/join-${CLUSTER_NAME}.sh
 cat <<EOF > /vagrant/join-${CLUSTER_NAME}.sh
@@ -101,26 +103,6 @@ chown -R vagrant:vagrant /home/vagrant/.kube
 # Copie du kubeconfig pour les autres nodes
 cp /etc/kubernetes/admin.conf /vagrant/admin.conf
 chown vagrant:vagrant /vagrant/admin.conf
-
-# Création de clés pour SSH ET SCP entre nodes
-# Recopié sur tout les nodes à la fin
-# echo "⚙️  Création de clés ssh sur le controlplane"
-# ssh-keygen -t rsa -b 2048 -N "" -f /root/.ssh/id_rsa
-# chown vagrant:vagrant /root/.ssh/id_rsa
-# chmod 600 /root/.ssh/id_rsa
-# cp /root/.ssh/id_rsa.pub /vagrant/id_rsa.root.${CLUSTER_NAME}.pub
-
-# ssh-keygen -t rsa -b 2048 -N "" -f /home/vagrant/.ssh/id_rsa
-# chown vagrant:vagrant /home/vagrant/.ssh/id_rsa
-# chmod 600 /home/vagrant/.ssh/id_rsa
-# # cp /home/vagrant/.ssh/id_rsa.pub /vagrant/id_rsa.vagrant.$(hostname).pub
-# cp /home/vagrant/.ssh/id_rsa.pub /vagrant/id_rsa.vagrant.$(CLUSTER_NAME).pub
-# chown vagrant:vagrant /vagrant/id_rsa.vagrant.$(CLUSTER_NAME).pub
-# chmod 600 /vagrant/id_rsa.vagrant.$(CLUSTER_NAME).pub
-
-# cp /home/vagrant/.ssh/id_rsa /vagrant/id_rsa.vagrant.$(CLUSTER_NAME)
-# chown vagrant:vagrant /vagrant/id_rsa.vagrant.$(CLUSTER_NAME)
-# chmod 600 /vagrant/id_rsa.vagrant.$(CLUSTER_NAME)
 
 # Attente (utile encore ??)
 # echo "⏳ Attente que l'API Kubernetes soit accessible via la VIP ($CONTROLPLANE_VIP:6443)..."
@@ -141,9 +123,10 @@ chown vagrant:vagrant /vagrant/admin.conf
 # echo "✅ API Kubernetes accessible via la VIP. Suite du provisioning..."
 
 
-echo "⏳ Attente que l'API Kubernetes soit disponible pour installation du CNI..."
+
 for i in {1..60}; do
   su - vagrant -c "kubectl get nodes &>/dev/null" && break
+  echo "⏳ Attente que l'API Kubernetes soit disponible pour installation du CNI..."
   sleep 2
 done
 
@@ -151,35 +134,93 @@ done
 echo "🔧 CNI installation : $CNI_PLUGIN"
 if [[ "$CNI_PLUGIN" == "flannel" ]]; then
   su - vagrant -c "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
-elif [[ "$CNI_PLUGIN" == "cilium" ]]; then
+elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then
   if ! command -v helm &> /dev/null; then
-    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   fi
   su - vagrant -c "helm repo add cilium https://helm.cilium.io/"
   su - vagrant -c "helm repo update"
-  su - vagrant -c "helm install cilium cilium/cilium \
-    --namespace kube-system \
-    --set kubeProxyReplacement=true \
-    --set kubeProxyReplacementStrict=true \
-    --set encryption.enabled=true \
-    --set encryption.type=wireguard \
-    --set enableL7Proxy=true \
-    --set k8sServiceHost=$MY_IP \
-    --set k8sServicePort=6443 \
-    --set operator.replicas=1"
+
+  if [[ "$CNI_PLUGIN" == "cilium-encryption-mtls" ]]; then
+    echo "🔧 Cilium installation with encryption mTLS Spiffe"
+    su - vagrant -c "helm install cilium cilium/cilium \
+      --namespace kube-system \
+      --set kubeProxyReplacement=true \
+      --set kubeProxyReplacementStrict=true \
+      --set encryption.enabled=true \
+      --set encryption.type=wireguard \
+      --set enableL7Proxy=true \
+      --set k8sServiceHost=$MY_IP \
+      --set k8sServicePort=6443 \
+      --set authentication.mutual.spire.enabled=true \
+      --set authentication.mutual.spire.install.enabled=true \
+      --set operator.replicas=1" 
+    # NOTE : 
+    # About : --set authentication.mutual.spire.install.server.dataStorage.enabled=false \
+    # The spire server default installation requires PersistentVolumeClaim support in the cluster.
+    # For lab or local cluster, you can switch to in-memory storage by passing authentication.mutual.spire.install.server.dataStorage.enabled=false 
+    # to the installation command, at the cost of re-creating all data when the SPIRE server pod is restarted.
+    #
+    # Or we can create a PV for the spire server
+    echo "🛢️  Creating the PV spire-pv for the Spire Sever ..."
+    # for i in {1..60}; do
+    #   su - vagrant -c "kubectl get nodes &>/dev/null" && break
+    #   echo "⏳ Attente que l'API Kubernetes soit disponible pour installation du CNI..."
+    #   sleep 2
+    # done
+    sudo mkdir -p /mnt/data-spire-server
+    su - vagrant -c "kubectl apply -f -" <<EOF
+    apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: spire-pv
+    spec:
+      capacity:
+        storage: 1Gi
+      volumeMode: Filesystem
+      accessModes:
+        - ReadWriteOnce
+      persistentVolumeReclaimPolicy: Retain
+      storageClassName: ""
+      hostPath:
+        path: /mnt/data-spire-server
+EOF
+  fi
+
+  if [[ "$CNI_PLUGIN" == "cilium" ]]; then
+    echo "🔧 Cilium base installation (no encrytion)"
+    su - vagrant -c "helm install cilium cilium/cilium \
+      --namespace kube-system \
+      --set operator.replicas=1" 
+  fi
+
+  echo "⚙️  CLI cilium installation"
+  CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+  CLI_ARCH=amd64
+  if [ "$(uname -m)" = "aarch64" ]; then CLI_ARCH=arm64; fi
+  curl -fsSL --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+  sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
+  sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
+  rm -f cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+  su - vagrant -c "cilium version"
+  echo "🔨 Hubble Cilium installation ..."
+  HUBBLE_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/hubble/master/stable.txt)
+  HUBBLE_ARCH=amd64
+  if [ "$(uname -m)" = "aarch64" ]; then HUBBLE_ARCH=arm64; fi
+  curl -fsSL --remote-name-all https://github.com/cilium/hubble/releases/download/$HUBBLE_VERSION/hubble-linux-${HUBBLE_ARCH}.tar.gz{,.sha256sum}
+  sha256sum --check hubble-linux-${HUBBLE_ARCH}.tar.gz.sha256sum
+  sudo tar xzvfC hubble-linux-${HUBBLE_ARCH}.tar.gz /usr/local/bin
+  rm hubble-linux-${HUBBLE_ARCH}.tar.gz{,.sha256sum}
+  su - vagrant -c "hubble version"
+
+  # Enable Hubble
+  su - vagrant -c "cilium hubble enable"
+  echo "💡  Hubble is enabled ! To use it : $ sudo hubble observe --server unix:///var/run/cilium/hubble.sock -f"
+
 else
-  echo "[ERREUR] CNI '$CNI_PLUGIN' inconnu."
+  echo "🛑 CNI '$CNI_PLUGIN' unkown."
   exit 1
 fi
-
-
-# Génération du script de jointure pour workers
-# JOIN_COMMAND=$(kubeadm token create --print-join-command)
-# OLD_IP=$(echo "$JOIN_COMMAND" | awk '{print $3}' | cut -d: -f1)
-# JOIN_COMMAND=$(echo "$JOIN_COMMAND" | sed "s/$OLD_IP/$MY_IP/")
-# echo "$JOIN_COMMAND" > /vagrant/join-${CLUSTER_NAME}.sh
-# chown vagrant:vagrant /vagrant/join-${CLUSTER_NAME}.sh
-# chmod +x /vagrant/join-${CLUSTER_NAME}.sh
 
 # Removing taint node-role.kubernetes.io/control-plane:NoSchedule
 echo "🔧  Removing Taint node-role.kubernetes.io/control-plane:NoSchedule"

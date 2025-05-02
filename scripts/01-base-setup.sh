@@ -44,12 +44,12 @@ fi
 # ========================================
 # Export dans /etc/environment
 # ========================================
-echo "ℹ️  Saving $MY_IP in /etc/environment"
+echo "💾  Saving $MY_IP in /etc/environment"
 sed -i '/^PRIMARY_IP=/d' /etc/environment
 echo "PRIMARY_IP=$MY_IP" >> /etc/environment
 
 # Point to Google's DNS server / Désactive le stub DNS local (127.0.0.53)
-echo "ℹ️  Modifying /etc/systemd/resolved.conf and restarting the service"
+echo "🛠️  Modifying /etc/systemd/resolved.conf and restarting the service"
 sed -i -e 's/#DNS=/DNS=8.8.8.8/' /etc/systemd/resolved.conf
 sed -i 's/^#*DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf
 service systemd-resolved restart
@@ -58,11 +58,11 @@ service systemd-resolved restart
 export DEBIAN_FRONTEND=noninteractive
 
 # Désactive unattended-upgrades si présent (optionnel mais recommandé en lab)
-echo "ℹ️  Disabling the unattended-upgrades service"
-systemctl stop unattended-upgrades || true
-systemctl disable unattended-upgrades || true
+echo "🔧  Disabling the unattended-upgrades service"
+systemctl stop unattended-upgrades >/dev/null 2>&1 || true
+systemctl disable unattended-upgrades >/dev/null 2>&1 || true
 
-echo "ℹ️  Installing common dependencies"
+echo "📦 Installing common dependencies ..."
 # Mise à jour des dépôts et des paquets
 apt-get update -y > /dev/null
 apt-get upgrade -y > /dev/null
@@ -82,7 +82,7 @@ apt-get install -y \
   git > /dev/null
 
 # Préparation du noyau pour Kubernetes (réseaux, ponts)
-echo "ℹ️  Preparing the kernel for Kubernetes"
+echo "⚙️  Preparing the kernel for Kubernetes ..."
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
 overlay
 br_netfilter
@@ -92,7 +92,7 @@ sudo modprobe overlay
 sudo modprobe br_netfilter
 
 # Configuration sysctl nécessaire pour Kubernetes
-echo "[BASE] Configuration sysctl"
+echo "🐧 Configuration sysctl"
 # sysctl params required by setup, params persist across reboots
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
@@ -101,12 +101,21 @@ net.ipv4.ip_forward                 = 1
 EOF
 
 # On applique sysctl sans reboot
-sysctl --system
+sysctl --system > /dev/null 2>&1
 
 # Activation immédiate du forwarding (A VOIR SI PAS EN DOUBLE AVEC DESSUS)
 echo 1 > /proc/sys/net/ipv4/ip_forward
-sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv4.ip_forward=1 > /dev/null
 
 # Lien symbolique pour bpftool 
 KERNEL_VERSION=$(uname -r)
 ln -sf /usr/lib/linux-tools-${KERNEL_VERSION}/bpftool /usr/local/bin/bpftool || true
+
+# FALCO
+echo "🛡️  Installing Falco ..."
+curl -fsSL https://falco.org/repo/falcosecurity-packages.asc -o /tmp/falco.asc
+gpg --batch --yes --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg /tmp/falco.asc
+echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" > /etc/apt/sources.list.d/falcosecurity.list
+apt-get install -y dialog >/dev/null
+FALCO_FRONTEND=noninteractive apt-get install -y falco >/dev/null
+systemctl stop falco >/dev/null 2>&1 || true

@@ -53,21 +53,7 @@ fi
 # echo "🚀 Tous les ports sont accessibles. Lancement du kubeadm join..."
 
 
-# Attente que le script de jointure soit disponible
-echo "⏳ Attente du script de jointure ($JOIN_SCRIPT)..."
-for i in {1..30}; do
-  if [ -f "$JOIN_SCRIPT" ]; then
-    break
-  fi
-  echo "⏳ Script de jointure non trouvé, tentative $i/30..."
-  sleep 2
-done
 
-# Échec si le script n'existe pas
-if [ ! -f "$JOIN_SCRIPT" ]; then
-  echo "❌ Le script de jointure controlplane n'existe pas."
-  exit 1
-fi
 
 # Copie du kubeconfig pour permettre kubectl sur les workers
 mkdir -p /home/vagrant/.kube
@@ -90,6 +76,22 @@ if ! nc -z -w5 $CONTROLPLANE_VIP 6443; then
   exit 1
 fi
 
+# Attente que le script de jointure soit disponible
+for i in {1..30}; do
+  if [ -f "$JOIN_SCRIPT" ]; then
+    break
+  fi
+  echo "⏳ Script de jointure non trouvé, tentative $i/30..."
+  sleep 2
+done
+
+# Échec si le script n'existe pas
+if [ ! -f "$JOIN_SCRIPT" ]; then
+  echo "❌ Le script de jointure controlplane n'existe pas."
+  exit 1
+fi
+
+
 # echo "🐞 Contenu du fichier JOIN_SCRIPT $JOIN_SCRIPT"
 # cat $JOIN_SCRIPT
 
@@ -97,7 +99,7 @@ kubeadm config images pull
 
 # Exécution du script de jointure
 
-echo '🐞 Execution du script de jointure : $JOIN_SCRIPT --apiserver-advertise-address "$MY_IP"'
+echo '🐞 Executing join script : $JOIN_SCRIPT --apiserver-advertise-address "$MY_IP"'
 
 # bash "$JOIN_SCRIPT" --config /tmp/join-config.yaml || exit 1
 bash "$JOIN_SCRIPT" --apiserver-advertise-address "$MY_IP"

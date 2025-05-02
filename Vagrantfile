@@ -16,7 +16,7 @@ UBUNTU_BOX = ENV['UBUNTU_BOX'] || "jammy64-updated" # Ubuntu 22.04 par défaut
 CLUSTER_NAME = ENV['CLUSTER_NAME'] || "k8s"
 
 # CNI : cillium ou flannel
-CNI_PLUGIN = ENV['CNI_PLUGIN'] || "cilium"
+CNI_PLUGIN = ENV['CNI_PLUGIN'] || "cilium-encryption-mtls"
 
 # Version Kubernetes
 K8S_VERSION = ENV['K8S_VERSION'] || "1.32"
@@ -138,7 +138,7 @@ Vagrant.configure("2") do |config|
     config.vm.define "#{CLUSTER_NAME}-controlplane0#{i}" do |node|
       node.vm.provider "virtualbox" do |vb|
         vb.name = "#{CLUSTER_NAME}-controlplane0#{i}"
-        vb.memory = 2048
+        vb.memory = 4096
         vb.cpus = 2
       end
       node.vm.hostname = "#{CLUSTER_NAME}-controlplane0#{i}"
@@ -161,11 +161,11 @@ Vagrant.configure("2") do |config|
       # node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh"
       node.vm.provision "01-base-setup", type: "shell", path: "scripts/01-base-setup.sh",  env: {"BUILD_MODE" => BUILD_MODE}
       if CONTAINER_RUNTIME == "docker"
-        node.vm.provision "02-containerd-docker", type: "shell", path: "scripts/03-containerd-docker.sh"
+        node.vm.provision "03-containerd-docker", type: "shell", path: "scripts/03-containerd-docker.sh"
       else
-        node.vm.provision "02-containerd", type: "shell", path: "scripts/03-containerd.sh"
+        node.vm.provision "03-containerd", type: "shell", path: "scripts/03-containerd.sh"
       end
-      node.vm.provision "03-kubernetes", type: "shell", path: "scripts/04-kubernetes.sh", env: {"K8S_VERSION" => K8S_VERSION}
+      node.vm.provision "04-kubernetes", type: "shell", path: "scripts/04-kubernetes.sh", env: {"K8S_VERSION" => K8S_VERSION}
 
       if i == 1 # First (or unique) controlplane
         node.vm.provision "05-first-controlplane", type: "shell", path: "scripts/05-first-controlplane-join.sh",
@@ -176,7 +176,7 @@ Vagrant.configure("2") do |config|
           "NUM_CONTROLPLANE" => NUM_CONTROLPLANE,
           "IP_START" => IP_START}
       end
-      if NUM_CONTROLPLANE > 1 && i > 1 # Autres controlplane
+      if NUM_CONTROLPLANE > 1 && i > 1 # Other controlplanes
         node.vm.provision "06-secondary-controlplane", type: "shell", path: "scripts/06-secondary-controlplane-join.sh",
           env: {"CLUSTER_NAME" => CLUSTER_NAME, "CONTROLPLANE_VIP" => CONTROLPLANE_VIP}
       end
@@ -206,7 +206,7 @@ Vagrant.configure("2") do |config|
     config.vm.define "#{CLUSTER_NAME}-node0#{i}" do |node|
       node.vm.provider "virtualbox" do |vb|
         vb.name = "#{CLUSTER_NAME}-node0#{i}"
-        vb.memory = 1024
+        vb.memory = 4096
         vb.cpus = 1
       end
       node.vm.hostname = "#{CLUSTER_NAME}-node0#{i}"
@@ -246,7 +246,7 @@ Vagrant.configure("2") do |config|
     config.vm.define "#{CLUSTER_NAME}-extra0#{i}" do |node|
       node.vm.provider "virtualbox" do |vb|
         vb.name = "#{CLUSTER_NAME}-extra0#{i}"
-        vb.memory = 1024
+        vb.memory = 2048
         vb.cpus = 1
       end
       node.vm.hostname = "#{CLUSTER_NAME}-extra0#{i}"

@@ -1,8 +1,8 @@
 # Kubernetes with Vagrant and VirtualBox (Flannel / Cilium / WireGuard / Multi-ControlPlane)
 
-This project lets you create a **Kubernetes cluster** (version configurable) on **Ubuntu** using **Vagrant** and **VirtualBox**. It supports **multi-node** and **multi-controlplane** setups (with *haproxy* on VIP), **extra VMs**, and **VirtualBox in Bridge (static and dynamic) or NAT mode**. You can choose the **CNI** (Flannel or Cilium with WireGuard), the container runtime (*containerd* or *Docker*), and it automatically handles node IPs.
+This project lets you create a **Kubernetes cluster** (version configurable) on **Ubuntu** using **Vagrant** and **VirtualBox**. It supports **multi-node** and **multi-controlplane** setups (with *haproxy* on a VIP), **extra VMs**, and **VirtualBox in Bridge (static and dynamic) or NAT mode**. You can choose the **CNI** (Flannel or Cilium with WireGuard encryption/SPIFFE/mTLS/Hubble), the container runtime (*containerd* or *Docker*), and it automatically handles node IPs.
 
-> ⚠️ Multi-controlplane mode is **not supported** with `bridge_dyn`, because HAProxy must know the static IPs of the controlplanes to configure load balancing.
+> ⚠️ Multi-controlplane mode is **not supported** with `bridge_dyn`, because *HAProxy* must know the static IPs of the controlplanes to configure load balancing.
 
 > 🧠 If no VIP is specified with `-p <num:VIP>`, the VIP will be set to the first address of `-a <ip_start>`.
 
@@ -190,6 +190,7 @@ $ vagrant ssh dev-node01
 - Automatic kubeconfig setup
 - NAT / BRIDGE_STATIC / BRIDGE_DYN networking
 - Choice of CNI: Flannel or Cilium with WireGuard
+- Cilium comes with Wireguard encryption / SPIFFE support / mTLS / Hubble / Cilium CLI
 - Choice of container runtime: Docker or containerd
 - Persistent `.env.<cluster>` files for context reload
 - Dry-run mode for safe preview of commands

@@ -31,9 +31,9 @@ echo \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 # Installation de containerd.io et de Docker (version maintenue par Docker)
-sudo apt-get update > /dev/null
+sudo apt-get update > /dev/null 2>&1
 # sudo apt-get install -y containerd.io
-sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin  > /dev/null
+sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin  > /dev/null 2>&1
 
 # Ajout de l'utilisateur vagrant au groupe docker (évite les sudo docker)
 sudo usermod -aG docker vagrant

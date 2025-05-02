@@ -11,7 +11,7 @@ function usage() {
   echo "  $0 halt -n <cluster_name>"
   echo "Options:"
   echo "  -n <cluster_name>   Cluster name prefix (required for up and destroy)"
-  echo "  -c <cni>            CNI plugin: cilium | flannel (default: cilium)"
+  echo "  -c <cni>            CNI plugin: cilium | cilium-encryption-mtls | flannel (default: cilium-encryption-mtls)"
   echo "  -v <k8s_version>    Kubernetes version (default: 1.32)"
   echo "  -w <workers>        Number of worker nodes (default: 1)"
   echo "  -m <build_mode>     Network mode: bridge_static | bridge_dyn | nat (default: bridge_static)"
@@ -32,7 +32,7 @@ COMMAND=$1
 shift
 
 # Default values
-CNI_PLUGIN="cilium"
+CNI_PLUGIN="cilium-encryption-mtls"
 K8S_VERSION="1.32"
 NUM_WORKER_NODES="1"
 BUILD_MODE="bridge_static"
@@ -142,6 +142,7 @@ case $COMMAND in
     if $DRY_RUN; then
       echo "[DRY-RUN] Vagrant up command that would be executed :"
       echo "CLUSTER_NAME=$CLUSTER_NAME K8S_VERSION=$K8S_VERSION CNI_PLUGIN=$CNI_PLUGIN NUM_WORKER_NODES=$NUM_WORKER_NODES NUM_CONTROLPLANE=$NUM_CONTROLPLANE NUM_EXTRA_NODES=$NUM_EXTRA_NODES BUILD_MODE=$BUILD_MODE UBUNTU_BOX=$UBUNTU_BOX CONTAINER_RUNTIME=$CONTAINER_RUNTIME IP_START=$IP_START vagrant up"
+      rm -f .env."$CLUSTER_NAME"
     else
       NUM_CONTROLPLANE=$NUM_CONTROLPLANE \
       CONTROLPLANE_VIP="$CONTROLPLANE_VIP" \
