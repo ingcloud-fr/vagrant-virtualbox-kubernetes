@@ -134,7 +134,7 @@ case $COMMAND in
     echo "  Runtime: $CONTAINER_RUNTIME"
     echo "  Box: $UBUNTU_BOX"
     echo "  Mode: $BUILD_MODE"
-    #echo "  IP start: $IP_START"
+    echo "  IP start: $IP_START"
     if [ "$BUILD_MODE" != "nat" ]; then
         echo "IP_START=\"$IP_START\"" >> .env."$CLUSTER_NAME"
     fi

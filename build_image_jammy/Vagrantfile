@@ -32,7 +32,7 @@ Vagrant.configure("2") do |config|
     systemctl stop falco || true 
 
     # Autres packages
-    apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common \ 
+    apt-get install -y bash-completion apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common \ 
         linux-headers-$(uname -r) linux-tools-common linux-tools-$(uname -r) curl git
 
     # Cleanup

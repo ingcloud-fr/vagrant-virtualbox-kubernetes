@@ -68,6 +68,7 @@ apt-get update -y > /dev/null
 apt-get upgrade -y > /dev/null
 # Installation des dépendances communes
 apt-get install -y \
+  bash-completion \
   apt-transport-https \
   ca-certificates \
   curl \
