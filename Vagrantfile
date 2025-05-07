@@ -74,7 +74,7 @@ def generate_mac()
   "080027%06x" % rand(0xffffff)
 end
 
-# Création d'un paire de clé ssh
+# Création d'une paire de clé ssh pour le cluster
 require 'fileutils'
 KEY_DIR = File.join(Dir.pwd, "ssh-keys")
 PRIVATE_KEY_PATH = File.join(KEY_DIR, "id_rsa_#{CLUSTER_NAME}")
@@ -91,6 +91,9 @@ Vagrant.configure("2") do |config|
   config.vm.box = UBUNTU_BOX
   config.vm.boot_timeout = 900
   config.vm.box_check_update = false
+  config.vm.synced_folder ".", "/vagrant"
+  # config.vm.synced_folder ".", "/vagrant", mount_options: ["ro"]
+  # config.vm.synced_folder "./opt-labs", "/opt/labs"
 
   # =============================
   # VM HAProxy pour VIP Kubernetes (uniquement si multi-controlplane)

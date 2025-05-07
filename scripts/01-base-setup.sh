@@ -120,3 +120,7 @@ echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://down
 apt-get install -y dialog >/dev/null
 FALCO_FRONTEND=noninteractive apt-get install -y falco >/dev/null
 systemctl stop falco >/dev/null 2>&1 || true
+
+# /opt/labs/
+sudo mkdir /opt/labs
+chmod 777 /opt/labs
