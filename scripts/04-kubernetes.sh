@@ -2,7 +2,7 @@
 set -e
 
 # ============================
-# 03-kubernetes.sh
+# 04-kubernetes.sh
 # Installation de Kubernetes (kubelet, kubeadm, kubectl)
 # ============================
 

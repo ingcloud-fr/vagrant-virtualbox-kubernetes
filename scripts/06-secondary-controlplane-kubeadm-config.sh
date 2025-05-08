@@ -2,7 +2,7 @@
 set -ex
 
 # ======================
-# Script pour les noeuds CONTROLPLANE secondaires (multi-controlplane)
+# 06-Script pour les noeuds CONTROLPLANE secondaires (multi-controlplane)
 # ======================
 
 CLUSTER_NAME=${CLUSTER_NAME:-k8s}

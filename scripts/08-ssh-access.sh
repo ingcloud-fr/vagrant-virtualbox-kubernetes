@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
-  
+
+# ======================
+# 08 - Script SSH
+# ======================
+
 CLUSTER_NAME=${CLUSTER_NAME:-k8s}
 
 echo "⚙️  Configuring SSH access between nodes ..."

@@ -2,7 +2,7 @@
 set -e
 
 # ======================
-# Script pour les noeuds WORKER
+# 07-Script pour les noeuds WORKER
 # ======================
 
 CLUSTER_NAME=${CLUSTER_NAME:-k8s}
