@@ -113,7 +113,7 @@ KERNEL_VERSION=$(uname -r)
 ln -sf /usr/lib/linux-tools-${KERNEL_VERSION}/bpftool /usr/local/bin/bpftool || true
 
 # FALCO
-echo "🛡️  Installing Falco ..."
+echo "🛡️  Installing Falco (service disabled)..."
 curl -fsSL https://falco.org/repo/falcosecurity-packages.asc -o /tmp/falco.asc
 gpg --batch --yes --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg /tmp/falco.asc
 echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" > /etc/apt/sources.list.d/falcosecurity.list

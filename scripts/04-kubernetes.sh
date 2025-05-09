@@ -20,6 +20,7 @@ swapoff -a
 sed -i '/ swap / s/^/#/' /etc/fstab
 
 # Ubuntu 24.04 (noble) reactive le swap lors d'un redemarrage
+echo "⚙️  Creating disable-swap service"
 cat <<EOF | sudo tee /etc/systemd/system/disable-swap.service
 [Unit]
 Description=Disable swap at boot
@@ -38,7 +39,7 @@ sudo systemctl daemon-reexec
 sudo systemctl daemon-reload
 sudo systemctl enable disable-swap
 
-echo "📦  Installing kubelet kubeadm kubectl"
+echo "📦  Installing kubelet kubeadm kubectl ..."
 # Préparation du dossier
 sudo mkdir -p /etc/apt/keyrings
 
