@@ -155,13 +155,26 @@ elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then
       --set authentication.mutual.spire.enabled=true \
       --set authentication.mutual.spire.install.enabled=true \
       --set operator.replicas=1" 
+    # A METTRE POUR LOADBALANCER L2
+    #   cilium install \
+    # --version v1.17.1 \
+    # --set kubeProxyReplacement=true \
+    # --set k8sServiceHost="kind-control-plane" \
+    # --set k8sServicePort=6443 \
+    # --set l2announcements.enabled=true \
+    # --set l2announcements.leaseDuration="3s" \
+    # --set l2announcements.leaseRenewDeadline="1s" \
+    # --set l2announcements.leaseRetryPeriod="500ms" \
+    # --set devices="{eth0,net0}" \
+    # --set externalIPs.enabled=true \
+    # --set operator.replicas=2
     # NOTE : 
     # About : --set authentication.mutual.spire.install.server.dataStorage.enabled=false \
     # The spire server default installation requires PersistentVolumeClaim support in the cluster.
     # For lab or local cluster, you can switch to in-memory storage by passing authentication.mutual.spire.install.server.dataStorage.enabled=false 
     # to the installation command, at the cost of re-creating all data when the SPIRE server pod is restarted.
     #
-    # Or we can create a PV for the spire server
+    # Or we can create a PV (1 Gi min)for the spire server
     echo "🛢️  Creating the PV spire-pv for the Spire Sever ..."
     # for i in {1..60}; do
     #   su - vagrant -c "kubectl get nodes &>/dev/null" && break
