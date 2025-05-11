@@ -32,11 +32,11 @@ COMMAND=$1
 shift
 
 # Default values
-CNI_PLUGIN="cilium-encryption-mtls-l7-l2lb"
-K8S_VERSION="1.32"
+CNI_PLUGIN="cilium-encryption-mtls-l7-l2lb-gwapi"
+K8S_VERSION="1.33"
 NUM_WORKER_NODES="1"
 BUILD_MODE="bridge_static"
-UBUNTU_BOX="jammy64-updated"
+UBUNTU_BOX="noble64-updated"
 CONTAINER_RUNTIME="docker"
 IP_START="192.168.1.200"
 NUM_CONTROLPLANE="1"

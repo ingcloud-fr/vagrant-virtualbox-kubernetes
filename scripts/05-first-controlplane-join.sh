@@ -174,6 +174,16 @@ elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then # $CNI_PLUGIN contains "cilium"
       --set encryption.type=wireguard"
   fi
 
+  if [[ "$CNI_PLUGIN" == *"gwapi"* ]]; then
+    su - vagrant -c 'helm list -n kube-system'
+    echo "⚙️ Cilium upgrade with Gateway API"
+    su - vagrant -c "helm upgrade cilium cilium/cilium \
+      --namespace kube-system \
+      --reuse-values \
+      --set kubeProxyReplacement=true \
+      --set gatewayAPI.enabled=true"
+  fi
+
 
   if [[ "$CNI_PLUGIN" == *"mtls"* ]]; then
     su - vagrant -c 'helm list -n kube-system'

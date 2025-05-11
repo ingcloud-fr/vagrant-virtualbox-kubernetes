@@ -9,17 +9,17 @@
 BUILD_MODE = (ENV['BUILD_MODE'] || "BRIDGE_STATIC").upcase
 
 # Image Ubuntu 
-#UBUNTU_BOX = ENV['UBUNTU_BOX'] || "noble64-updated" # Ubuntu 24.04 par défaut
-UBUNTU_BOX = ENV['UBUNTU_BOX'] || "jammy64-updated" # Ubuntu 22.04 par défaut
+UBUNTU_BOX = ENV['UBUNTU_BOX'] || "noble64-updated" # Ubuntu 24.04 par défaut
+#UBUNTU_BOX = ENV['UBUNTU_BOX'] || "jammy64-updated" # Ubuntu 22.04 par défaut
 
 # Nom du cluster utilisé pour préfixer les noms de VMs
 CLUSTER_NAME = ENV['CLUSTER_NAME'] || "k8s"
 
 # CNI : cillium ou flannel
-CNI_PLUGIN = ENV['CNI_PLUGIN'] || "cilium-encryption-mtls-l7-l2lb"
+CNI_PLUGIN = ENV['CNI_PLUGIN'] || "cilium-encryption-mtls-l7-l2lb-gwapi"
 
 # Version Kubernetes
-K8S_VERSION = ENV['K8S_VERSION'] || "1.32"
+K8S_VERSION = ENV['K8S_VERSION'] || "1.33"
 
 # CONTAINER_RUNTIME : "containerd" | "docker"
 # - "containerd" : installe containerd depuis les dépôts de la distribution
