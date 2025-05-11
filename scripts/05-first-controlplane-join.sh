@@ -122,8 +122,6 @@ chown vagrant:vagrant /vagrant/admin.conf
 # echo ""
 # echo "✅ API Kubernetes accessible via la VIP. Suite du provisioning..."
 
-
-
 for i in {1..60}; do
   su - vagrant -c "kubectl get nodes &>/dev/null" && break
   echo "⏳ Attente que l'API Kubernetes soit disponible pour installation du CNI..."
@@ -131,43 +129,61 @@ for i in {1..60}; do
 done
 
 # Installation du CNI
+HOSTNAME=$(hostname)
+# echo "🐞 DEBUG HOSTNAME = $HOSTNAME"
 echo "🔧 CNI installation : $CNI_PLUGIN"
 if [[ "$CNI_PLUGIN" == "flannel" ]]; then
   su - vagrant -c "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
-elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then
+elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then # $CNI_PLUGIN contains "cilium"
   if ! command -v helm &> /dev/null; then
+    echo "🔧 Installation Helm v3..."
     curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   fi
+  echo "🔧 Adding and update helm repo Cilium..."
   su - vagrant -c "helm repo add cilium https://helm.cilium.io/"
   su - vagrant -c "helm repo update"
+  # Base cilium
+  echo "🛠️  Cilium base installation..."
+  su - vagrant -c "helm install cilium cilium/cilium \
+    --namespace kube-system \
+    --set k8sServiceHost=$HOSTNAME \
+    --set k8sServicePort=6443 \
+    --set operator.replicas=2 \
+    --timeout 10m0s \
+    --wait \
+    --wait-for-jobs"
 
-  if [[ "$CNI_PLUGIN" == "cilium-encryption-mtls" ]]; then
-    echo "🔧 Cilium installation with encryption mTLS Spiffe"
-    su - vagrant -c "helm install cilium cilium/cilium \
+  if [[ "$CNI_PLUGIN" == *"l7"* ]]; then
+    su - vagrant -c 'helm list -n kube-system'
+    echo "⚙️ Cilium upgrade with encryption"
+    su - vagrant -c "helm upgrade cilium cilium/cilium \
       --namespace kube-system \
+      --reuse-values \
+      --set enableL7Proxy=true"
+  fi
+
+  if [[ "$CNI_PLUGIN" == *"encryption"* ]]; then
+    su - vagrant -c 'helm list -n kube-system'
+    echo "🔧 Cilium upgrade with Wireguard encryption"
+    su - vagrant -c "helm upgrade cilium cilium/cilium \
+      --namespace kube-system \
+      --reuse-values \
       --set kubeProxyReplacement=true \
       --set kubeProxyReplacementStrict=true \
       --set encryption.enabled=true \
-      --set encryption.type=wireguard \
-      --set enableL7Proxy=true \
-      --set k8sServiceHost=$MY_IP \
-      --set k8sServicePort=6443 \
+      --set encryption.type=wireguard"
+  fi
+
+
+  if [[ "$CNI_PLUGIN" == *"mtls"* ]]; then
+    su - vagrant -c 'helm list -n kube-system'
+    echo "🔧 Cilium upgrade with mTLS Spiffe"
+    su - vagrant -c "helm upgrade cilium cilium/cilium \
+      --namespace kube-system \
+      --reuse-values \
       --set authentication.mutual.spire.enabled=true \
-      --set authentication.mutual.spire.install.enabled=true \
-      --set operator.replicas=1" 
-    # A METTRE POUR LOADBALANCER L2
-    #   cilium install \
-    # --version v1.17.1 \
-    # --set kubeProxyReplacement=true \
-    # --set k8sServiceHost="kind-control-plane" \
-    # --set k8sServicePort=6443 \
-    # --set l2announcements.enabled=true \
-    # --set l2announcements.leaseDuration="3s" \
-    # --set l2announcements.leaseRenewDeadline="1s" \
-    # --set l2announcements.leaseRetryPeriod="500ms" \
-    # --set devices="{eth0,net0}" \
-    # --set externalIPs.enabled=true \
-    # --set operator.replicas=2
+      --set authentication.mutual.spire.install.enabled=true"
+
     # NOTE : 
     # About : --set authentication.mutual.spire.install.server.dataStorage.enabled=false \
     # The spire server default installation requires PersistentVolumeClaim support in the cluster.
@@ -176,11 +192,6 @@ elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then
     #
     # Or we can create a PV (1 Gi min)for the spire server
     echo "🛢️  Creating the PV spire-pv for the Spire Sever ..."
-    # for i in {1..60}; do
-    #   su - vagrant -c "kubectl get nodes &>/dev/null" && break
-    #   echo "⏳ Attente que l'API Kubernetes soit disponible pour installation du CNI..."
-    #   sleep 2
-    # done
     sudo mkdir -p /mnt/data-spire-server
     su - vagrant -c "kubectl apply -f -" <<EOF
     apiVersion: v1
@@ -199,12 +210,19 @@ elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then
         path: /mnt/data-spire-server
 EOF
   fi
-
-  if [[ "$CNI_PLUGIN" == "cilium" ]]; then
-    echo "🔧 Cilium base installation (no encrytion)"
-    su - vagrant -c "helm install cilium cilium/cilium \
+  if [[ "$CNI_PLUGIN" == *"l2lb"* ]]; then
+    echo "🛠️  Cilium upgrade with l2 announcements (loadbalancing)"
+    su - vagrant -c "helm upgrade cilium cilium/cilium \
       --namespace kube-system \
-      --set operator.replicas=1" 
+      --reuse-values \
+      --set kubeProxyReplacement=true \
+      --set l2announcements.enabled=true \
+      --set l2announcements.leaseDuration="3s" \
+      --set l2announcements.leaseRenewDeadline="1s" \
+      --set l2announcements.leaseRetryPeriod="500ms" \
+      --set devices[0]=eth0 --set devices[1]=eth1 \
+      --set externalIPs.enabled=true"
+    # eth1 bridge et eth0 nat
   fi
 
   echo "⚙️  CLI cilium installation"

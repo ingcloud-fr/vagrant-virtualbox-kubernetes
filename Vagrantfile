@@ -16,7 +16,7 @@ UBUNTU_BOX = ENV['UBUNTU_BOX'] || "jammy64-updated" # Ubuntu 22.04 par défaut
 CLUSTER_NAME = ENV['CLUSTER_NAME'] || "k8s"
 
 # CNI : cillium ou flannel
-CNI_PLUGIN = ENV['CNI_PLUGIN'] || "cilium-encryption-mtls"
+CNI_PLUGIN = ENV['CNI_PLUGIN'] || "cilium-encryption-mtls-l7-l2lb"
 
 # Version Kubernetes
 K8S_VERSION = ENV['K8S_VERSION'] || "1.32"

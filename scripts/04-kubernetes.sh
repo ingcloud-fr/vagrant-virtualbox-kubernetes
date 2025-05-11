@@ -63,6 +63,11 @@ su - vagrant -c "echo 'alias k=\"kubectl\"' >> ~/.bashrc"
 su - vagrant -c "echo 'source <(kubectl completion bash)' >> ~/.bashrc"
 su - vagrant -c "echo 'complete -o default -F __start_kubectl k' >> ~/.bashrc"
 
+# Helm v3
+echo "🔧 Installation Helm v3..."
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+
 # --- Configuration de l'adresse IP du noeud pour le kubelet et redemarrage ---
 echo "ℹ️  Configuring Kubelet to listen on IP $MY_IP"
 if [[ -n "$MY_IP" ]]; then

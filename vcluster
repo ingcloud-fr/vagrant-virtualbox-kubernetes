@@ -32,7 +32,7 @@ COMMAND=$1
 shift
 
 # Default values
-CNI_PLUGIN="cilium-encryption-mtls"
+CNI_PLUGIN="cilium-encryption-mtls-l7-l2lb"
 K8S_VERSION="1.32"
 NUM_WORKER_NODES="1"
 BUILD_MODE="bridge_static"
