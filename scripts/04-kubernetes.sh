@@ -15,7 +15,7 @@ K8S_VERSION=${K8S_VERSION:-1.32}
 MY_IP=$(grep PRIMARY_IP /etc/environment | cut -d= -f2)
 
 # --- Désactivation du swap ---
-echo "🔧  Disabling swap..."
+echo "🔧 Disabling swap..."
 swapoff -a
 sed -i '/ swap / s/^/#/' /etc/fstab
 

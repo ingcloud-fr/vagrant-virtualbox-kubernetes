@@ -44,7 +44,7 @@ fi
 # ========================================
 # Export dans /etc/environment
 # ========================================
-echo "💾  Saving $MY_IP in /etc/environment"
+echo "💾 Saving $MY_IP in /etc/environment"
 sed -i '/^PRIMARY_IP=/d' /etc/environment
 echo "PRIMARY_IP=$MY_IP" >> /etc/environment
 
@@ -58,7 +58,7 @@ service systemd-resolved restart
 export DEBIAN_FRONTEND=noninteractive
 
 # Désactive unattended-upgrades si présent (optionnel mais recommandé en lab)
-echo "🔧  Disabling the unattended-upgrades service"
+echo "🔧 Disabling the unattended-upgrades service"
 systemctl stop unattended-upgrades >/dev/null 2>&1 || true
 systemctl disable unattended-upgrades >/dev/null 2>&1 || true
 

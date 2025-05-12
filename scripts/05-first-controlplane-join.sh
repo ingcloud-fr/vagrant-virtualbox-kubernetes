@@ -124,14 +124,16 @@ chown vagrant:vagrant /vagrant/admin.conf
 
 for i in {1..60}; do
   su - vagrant -c "kubectl get nodes &>/dev/null" && break
-  echo "⏳ Attente que l'API Kubernetes soit disponible pour installation du CNI..."
+  echo "⏳ Waiting for Kubernetes API to be available for CNI installation..."
   sleep 2
 done
 
 # Installation CRDs API Gateway
+CRDS_TYPE="experimental" # Or standard
 VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/gateway-api/releases/latest | grep '"tag_name":' | cut -d '"' -f4)
-echo "📦  Installing LAST Gateway API CRDs : $VERSION"
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$VERSION/standard-install.yaml
+echo "📦  Installing $CRDS_TYPE LAST Gateway API CRDs : $VERSION ..."
+echo "💡 You can choice CRDS standard / experimental with CRDS_TYPE in this script"
+su - vagrant -c "kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$VERSION/$CRDS_TYPE-install.yaml"
 
 # Installation du CNI
 HOSTNAME=$(hostname)
@@ -160,7 +162,7 @@ elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then # $CNI_PLUGIN contains "cilium"
 
   if [[ "$CNI_PLUGIN" == *"l7"* ]]; then
     su - vagrant -c 'helm list -n kube-system'
-    echo "⚙️ Cilium upgrade with encryption"
+    echo "⚙️  Cilium upgrade with encryption"
     su - vagrant -c "helm upgrade cilium cilium/cilium \
       --namespace kube-system \
       --reuse-values \
@@ -181,7 +183,7 @@ elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then # $CNI_PLUGIN contains "cilium"
 
   if [[ "$CNI_PLUGIN" == *"gwapi"* ]]; then
     su - vagrant -c 'helm list -n kube-system'
-    echo "⚙️ Cilium upgrade with Gateway API"
+    echo "⚙️  Cilium upgrade with Gateway API"
     su - vagrant -c "helm upgrade cilium cilium/cilium \
       --namespace kube-system \
       --reuse-values \
@@ -262,6 +264,10 @@ EOF
   # Enable Hubble
   su - vagrant -c "cilium hubble enable"
   echo "💡  Hubble is enabled ! To use it forward port and launch hubble : $ cilium hubble port-forward & AND $ hubble observe"
+
+  # Redemarrage du daemonset cilium pour être sur que les différtents upgrade soit pris en compte 
+  echo "🔄  Restarting DaemonSet Cilium after Helm upgrades..."
+  su - vagrant -c "kubectl rollout restart daemonset cilium -n kube-system"
 
 else
   echo "🛑 CNI '$CNI_PLUGIN' unkown."
