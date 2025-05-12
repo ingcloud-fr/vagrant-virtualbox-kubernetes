@@ -128,6 +128,11 @@ for i in {1..60}; do
   sleep 2
 done
 
+# Installation CRDs API Gateway
+VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/gateway-api/releases/latest | grep '"tag_name":' | cut -d '"' -f4)
+echo "📦  Installing LAST Gateway API CRDs : $VERSION"
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$VERSION/standard-install.yaml
+
 # Installation du CNI
 HOSTNAME=$(hostname)
 # echo "🐞 DEBUG HOSTNAME = $HOSTNAME"
@@ -136,7 +141,7 @@ if [[ "$CNI_PLUGIN" == "flannel" ]]; then
   su - vagrant -c "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
 elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then # $CNI_PLUGIN contains "cilium"
   if ! command -v helm &> /dev/null; then
-    echo "🔧 Installation Helm v3..."
+    echo "📦 Installation Helm v3..."
     curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   fi
   echo "🔧 Adding and update helm repo Cilium..."
