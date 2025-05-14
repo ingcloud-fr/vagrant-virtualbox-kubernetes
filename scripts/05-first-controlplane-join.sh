@@ -155,7 +155,7 @@ elif [[ "$CNI_PLUGIN" == *"cilium"* ]]; then # $CNI_PLUGIN contains "cilium"
     --namespace kube-system \
     --set k8sServiceHost=$HOSTNAME \
     --set k8sServicePort=6443 \
-    --set operator.replicas=2 \
+    --set operator.replicas=1 \
     --timeout 10m0s \
     --wait \
     --wait-for-jobs"
