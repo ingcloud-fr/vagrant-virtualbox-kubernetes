@@ -14,3 +14,4 @@ cks*/
 .env.*
 kubeadm-config.yaml
 ssh-keys/
+tmp/
